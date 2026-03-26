@@ -26,6 +26,7 @@ import {
   generateSeedStrikes,
   haversineKm,
 } from './mockData';
+import { HttpLightningService } from './httpLightningService';
 
 // Speed of sound at sea level in km/s
 const SOUND_SPEED_KM_S = 0.343;
@@ -173,13 +174,12 @@ class MockLightningService implements ILightningService {
 // ─────────────────────────────────────────────────────────────────
 // Singleton export
 //
-// Set VITE_API_URL in the frontend Railway service's Variables tab
-// (e.g. https://strikewise-production.up.railway.app) to activate
-// the HTTP provider. Falls back to local mock when not set.
+// In production, default to the same-origin API so a single Railway
+// service can host both the dashboard and backend. VITE_API_URL can
+// still override this for split deployments.
 // ─────────────────────────────────────────────────────────────────
-import { HttpLightningService } from './httpLightningService';
-
-const apiUrl = import.meta.env.VITE_API_URL as string | undefined;
+const configuredApiUrl = import.meta.env.VITE_API_URL?.trim();
+const apiUrl = configuredApiUrl || (import.meta.env.PROD ? window.location.origin : undefined);
 
 export const lightningService: ILightningService = apiUrl
   ? new HttpLightningService(apiUrl)

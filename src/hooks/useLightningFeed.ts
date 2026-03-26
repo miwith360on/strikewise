@@ -64,6 +64,10 @@ export function useLightningFeed(): LightningFeedState {
     const unsub = lightningService.subscribeToLiveStrikes(DEFAULT_BOUNDS, (strike) => {
       setIsLive(true);
       setStrikes((prev) => {
+        if (prev.some((existing) => existing.id === strike.id)) {
+          return prev;
+        }
+
         const cutoff = Date.now() - 10 * 60 * 1000;
         const pruned = prev.filter((s) => s.timestamp > cutoff);
         return [...pruned, strike];

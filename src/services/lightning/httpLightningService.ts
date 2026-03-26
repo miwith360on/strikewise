@@ -46,6 +46,9 @@ export class HttpLightningService implements ILightningService {
     if (!res.ok) throw new Error(`Lightning API responded with ${res.status}`);
 
     const data = await res.json() as { strikes: LightningStrike[] };
+    for (const strike of data.strikes) {
+      this._seenIds.add(strike.id);
+    }
     return data.strikes;
   }
 
@@ -53,8 +56,6 @@ export class HttpLightningService implements ILightningService {
     bounds: MapBounds,
     onStrike: (strike: LightningStrike) => void,
   ): () => void {
-    this._seenIds.clear();
-
     const poll = async () => {
       try {
         const strikes = await this.getRecentStrikes(bounds, 10);
