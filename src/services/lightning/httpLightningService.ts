@@ -1,13 +1,9 @@
 // ─────────────────────────────────────────────────────────────────
-// MockLightningService
+// HttpLightningService
 //
-// Implements ILightningService with realistic simulated data.
-// To integrate a real provider (Vaisala, Blitzortung, Tomorrow.io,
-// AWS Environmental Intelligence, etc.):
-//
-//   1. Create `RealLightningService` implementing ILightningService
-//   2. Replace the instantiation in lightningService.ts
-//   3. All hooks and components continue working unchanged.
+// ILightningService implementation that fetches data from the
+// Strikewise backend API instead of generating mock data locally.
+// Activated when VITE_API_URL is set in the environment.
 // ─────────────────────────────────────────────────────────────────
 
 import type {
@@ -20,48 +16,67 @@ import type {
   SafetyStatus,
   ThunderETAEntry,
 } from './types';
-import {
-  DEFAULT_LOCATION,
-  generateLiveStrike,
-  generateSeedStrikes,
-  haversineKm,
-} from './mockData';
+import { haversineKm } from './mockData';
 
-// Speed of sound at sea level in km/s
 const SOUND_SPEED_KM_S = 0.343;
-
-// Prune strikes older than this
 const RETENTION_MS = 10 * 60 * 1000;
+const POLL_INTERVAL_MS = 10_000;
 
-let strikeCounter = 1000;
+export class HttpLightningService implements ILightningService {
+  private readonly baseUrl: string;
+  private _seenIds = new Set<string>();
 
-class MockLightningService implements ILightningService {
-  private _strikes: LightningStrike[] = [];
-
-  constructor() {
-    // Pre-populate with a realistic spread
-    this._strikes = generateSeedStrikes(DEFAULT_LOCATION, 32, 50);
+  constructor(baseUrl: string) {
+    // Strip trailing slash so all paths are consistent
+    this.baseUrl = baseUrl.replace(/\/$/, '');
   }
 
   // ── Public API ───────────────────────────────────────────────
 
-  async getRecentStrikes(_bounds: MapBounds, _minutes: number): Promise<LightningStrike[]> {
-    return this._getFiltered();
+  async getRecentStrikes(bounds: MapBounds, minutes: number): Promise<LightningStrike[]> {
+    const params = new URLSearchParams({
+      north: String(bounds.northEast.lat),
+      south: String(bounds.southWest.lat),
+      east: String(bounds.northEast.lng),
+      west: String(bounds.southWest.lng),
+      minutes: String(minutes),
+    });
+
+    const res = await fetch(`${this.baseUrl}/api/lightning?${params}`);
+    if (!res.ok) throw new Error(`Lightning API responded with ${res.status}`);
+
+    const data = await res.json() as { strikes: LightningStrike[] };
+    return data.strikes;
   }
 
   subscribeToLiveStrikes(
-    _bounds: MapBounds,
+    bounds: MapBounds,
     onStrike: (strike: LightningStrike) => void,
   ): () => void {
-    // Emit a new strike every 2–5 seconds (realistic storm frequency)
-    const interval = setInterval(() => {
-      this._prune();
-      const strike = generateLiveStrike(DEFAULT_LOCATION, strikeCounter++);
-      this._strikes.push(strike);
-      onStrike(strike);
-    }, this._nextInterval());
+    this._seenIds.clear();
 
-    return () => clearInterval(interval);
+    const poll = async () => {
+      try {
+        const strikes = await this.getRecentStrikes(bounds, 10);
+        for (const strike of strikes) {
+          if (!this._seenIds.has(strike.id)) {
+            this._seenIds.add(strike.id);
+            onStrike(strike);
+          }
+        }
+      } catch {
+        // Network errors are non-fatal during polling; retry next interval
+      }
+    };
+
+    // Kick off immediately (short delay to avoid startup race) then every interval
+    const timeout = setTimeout(poll, 500);
+    const interval = setInterval(poll, POLL_INTERVAL_MS);
+
+    return () => {
+      clearTimeout(timeout);
+      clearInterval(interval);
+    };
   }
 
   getSafetyStatus(
@@ -81,7 +96,6 @@ class MockLightningService implements ILightningService {
     const closest = Math.min(...distances);
     const count = recent.length;
 
-    // Compare to 5 minutes ago to determine trend
     const fiveMinAgo = Date.now() - 5 * 60 * 1000;
     const recent5 = recent.filter((s) => s.timestamp > fiveMinAgo).length;
     const older5 = count - recent5;
@@ -116,27 +130,12 @@ class MockLightningService implements ILightningService {
           lng: s.lng,
         };
       })
-      .filter((e) => e.etaSeconds > -5) // discard thunder already passed
+      .filter((e) => e.etaSeconds > -5)
       .sort((a, b) => a.etaSeconds - b.etaSeconds)
       .slice(0, 5);
   }
 
   // ── Private helpers ──────────────────────────────────────────
-
-  private _getFiltered(): LightningStrike[] {
-    this._prune();
-    return [...this._strikes];
-  }
-
-  private _prune() {
-    const cutoff = Date.now() - RETENTION_MS;
-    this._strikes = this._strikes.filter((s) => s.timestamp > cutoff);
-  }
-
-  private _nextInterval(): number {
-    // Random between 2 000 and 4 500 ms
-    return 2000 + Math.random() * 2500;
-  }
 
   private _buildStatus(
     level: SafetyLevel,
@@ -169,20 +168,3 @@ class MockLightningService implements ILightningService {
     };
   }
 }
-
-// ─────────────────────────────────────────────────────────────────
-// Singleton export
-//
-// Set VITE_API_URL in the frontend Railway service's Variables tab
-// (e.g. https://strikewise-production.up.railway.app) to activate
-// the HTTP provider. Falls back to local mock when not set.
-// ─────────────────────────────────────────────────────────────────
-import { HttpLightningService } from './httpLightningService';
-
-const apiUrl = import.meta.env.VITE_API_URL as string | undefined;
-
-export const lightningService: ILightningService = apiUrl
-  ? new HttpLightningService(apiUrl)
-  : new MockLightningService();
-
-export { DEFAULT_LOCATION };
