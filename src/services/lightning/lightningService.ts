@@ -171,18 +171,65 @@ class MockLightningService implements ILightningService {
   }
 }
 
+class ResilientLightningService implements ILightningService {
+  private readonly httpService: HttpLightningService | null;
+  private readonly mockService = new MockLightningService();
+  private activeSource: 'http' | 'mock';
+
+  constructor(baseUrl?: string) {
+    this.httpService = baseUrl !== undefined ? new HttpLightningService(baseUrl) : null;
+    this.activeSource = this.httpService ? 'http' : 'mock';
+  }
+
+  async getRecentStrikes(bounds: MapBounds, minutes: number): Promise<LightningStrike[]> {
+    if (!this.httpService) {
+      return this.mockService.getRecentStrikes(bounds, minutes);
+    }
+
+    try {
+      const strikes = await this.httpService.getRecentStrikes(bounds, minutes);
+      this.activeSource = 'http';
+      return strikes;
+    } catch {
+      this.activeSource = 'mock';
+      return this.mockService.getRecentStrikes(bounds, minutes);
+    }
+  }
+
+  subscribeToLiveStrikes(
+    bounds: MapBounds,
+    onStrike: (strike: LightningStrike) => void,
+  ): () => void {
+    if (this.activeSource === 'mock' || !this.httpService) {
+      return this.mockService.subscribeToLiveStrikes(bounds, onStrike);
+    }
+
+    return this.httpService.subscribeToLiveStrikes(bounds, onStrike);
+  }
+
+  getSafetyStatus(
+    location: LatLng,
+    strikes: LightningStrike[],
+    config: AlertConfig,
+  ): SafetyStatus {
+    return this.mockService.getSafetyStatus(location, strikes, config);
+  }
+
+  getThunderETAs(location: LatLng, strikes: LightningStrike[]): ThunderETAEntry[] {
+    return this.mockService.getThunderETAs(location, strikes);
+  }
+}
+
 // ─────────────────────────────────────────────────────────────────
 // Singleton export
 //
-// In production, default to the same-origin API so a single Railway
-// service can host both the dashboard and backend. VITE_API_URL can
-// still override this for split deployments.
+// Prefer the backend API at a relative path so local Vite proxying and
+// same-origin production hosting both work out of the box. When the API
+// is unavailable, transparently fall back to the local mock service.
 // ─────────────────────────────────────────────────────────────────
 const configuredApiUrl = import.meta.env.VITE_API_URL?.trim();
-const apiUrl = configuredApiUrl || (import.meta.env.PROD ? window.location.origin : undefined);
+const apiUrl = configuredApiUrl && configuredApiUrl.length > 0 ? configuredApiUrl : '';
 
-export const lightningService: ILightningService = apiUrl
-  ? new HttpLightningService(apiUrl)
-  : new MockLightningService();
+export const lightningService: ILightningService = new ResilientLightningService(apiUrl);
 
 export { DEFAULT_LOCATION };

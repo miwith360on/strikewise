@@ -104,10 +104,7 @@ export default function LandingPage() {
       {/* Gradient background glow */}
       <div
         aria-hidden="true"
-        className="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-2xl h-96 blur-3xl opacity-20 pointer-events-none"
-        style={{
-          background: 'radial-gradient(ellipse at 50% 0%, #ffe033 0%, transparent 70%)',
-        }}
+        className="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-2xl h-96 blur-3xl opacity-20 pointer-events-none bg-[radial-gradient(ellipse_at_50%_0%,#ffe033_0%,transparent_70%)]"
       />
 
       {/* Nav */}
@@ -166,7 +163,7 @@ export default function LandingPage() {
         {/* Live indicator */}
         <div className="flex items-center gap-2 text-xs font-mono text-storm-400">
           <span className="w-2 h-2 rounded-full bg-strike-safe animate-pulse" />
-          Simulated live data · No weather forecasts
+          Live preview feed · Coverage depends on provider
         </div>
       </main>
 
@@ -202,7 +199,7 @@ export default function LandingPage() {
 
       {/* Footer */}
       <footer className="relative z-10 text-center pb-6 text-[10px] font-mono text-storm-600">
-        © 2026 Strikewise · Data is mocked · Not for safety-critical use
+        © 2026 Strikewise · Operational preview · Not for safety-critical use
       </footer>
     </div>
   );

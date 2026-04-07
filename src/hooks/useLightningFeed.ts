@@ -9,11 +9,11 @@ import type {
 import { lightningService } from '@/services/lightning/lightningService';
 import { DEFAULT_LOCATION } from '@/services/lightning/lightningService';
 import { haversineKm } from '@/services/lightning/mockData';
+import type { MapBounds } from '@/services/lightning/types';
 
-const DEFAULT_BOUNDS = {
-  northEast: { lat: DEFAULT_LOCATION.lat + 0.8, lng: DEFAULT_LOCATION.lng + 1.1 },
-  southWest: { lat: DEFAULT_LOCATION.lat - 0.8, lng: DEFAULT_LOCATION.lng - 1.1 },
-};
+const QUERY_WINDOW_MINUTES = 10;
+const QUERY_LAT_SPAN = 0.8;
+const QUERY_LNG_SPAN = 1.1;
 
 const DEFAULT_CONFIG: AlertConfig = {
   dangerRadiusKm: 8,
@@ -46,36 +46,60 @@ export function strikeDistanceKm(strike: LightningStrike, config: AlertConfig): 
   );
 }
 
+function getBoundsForLocation(location: MonitoredLocation): MapBounds {
+  return {
+    northEast: { lat: location.lat + QUERY_LAT_SPAN, lng: location.lng + QUERY_LNG_SPAN },
+    southWest: { lat: location.lat - QUERY_LAT_SPAN, lng: location.lng - QUERY_LNG_SPAN },
+  };
+}
+
 export function useLightningFeed(): LightningFeedState {
   const [strikes, setStrikes] = useState<LightningStrike[]>([]);
   const [alertConfig, setAlertConfigState] = useState<AlertConfig>(DEFAULT_CONFIG);
   const [newestStrikeId, setNewestStrikeId] = useState<string | null>(null);
   const [isLive, setIsLive] = useState(false);
 
-  // Load initial seed strikes
+  // Connect once so the service can choose HTTP or mock mode before subscribing.
   useEffect(() => {
-    lightningService
-      .getRecentStrikes(DEFAULT_BOUNDS, 10)
-      .then((initial) => setStrikes(initial));
-  }, []);
+    let cancelled = false;
+    let unsub = () => {};
+    const bounds = getBoundsForLocation(alertConfig.monitored);
 
-  // Subscribe to live strike feed
-  useEffect(() => {
-    const unsub = lightningService.subscribeToLiveStrikes(DEFAULT_BOUNDS, (strike) => {
-      setIsLive(true);
-      setStrikes((prev) => {
-        if (prev.some((existing) => existing.id === strike.id)) {
-          return prev;
+    setNewestStrikeId(null);
+    setIsLive(false);
+
+    void lightningService.getRecentStrikes(bounds, QUERY_WINDOW_MINUTES)
+      .then((initial) => {
+        if (cancelled) {
+          return;
         }
 
-        const cutoff = Date.now() - 10 * 60 * 1000;
-        const pruned = prev.filter((s) => s.timestamp > cutoff);
-        return [...pruned, strike];
+        setStrikes(initial);
+        unsub = lightningService.subscribeToLiveStrikes(bounds, (strike) => {
+          setIsLive(true);
+          setStrikes((prev) => {
+            if (prev.some((existing) => existing.id === strike.id)) {
+              return prev;
+            }
+
+            const cutoff = Date.now() - 10 * 60 * 1000;
+            const pruned = prev.filter((s) => s.timestamp > cutoff);
+            return [...pruned, strike];
+          });
+          setNewestStrikeId(strike.id);
+        });
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setStrikes([]);
+        }
       });
-      setNewestStrikeId(strike.id);
-    });
-    return unsub;
-  }, []);
+
+    return () => {
+      cancelled = true;
+      unsub();
+    };
+  }, [alertConfig.monitored]);
 
   const setAlertConfig = useCallback((cfg: AlertConfig) => {
     setAlertConfigState(cfg);

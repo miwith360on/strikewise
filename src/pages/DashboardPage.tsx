@@ -30,7 +30,7 @@ function CollapsibleSection({
       <button
         className="w-full flex items-center justify-between px-1 py-2 text-left group focus:outline-none"
         onClick={() => setOpen((v) => !v)}
-        aria-expanded={open}
+        aria-expanded={open ? 'true' : 'false'}
       >
         <span className="flex items-center gap-2 text-[10px] uppercase tracking-widest font-mono text-storm-400 group-hover:text-storm-200 transition-colors">
           {icon}
@@ -134,7 +134,7 @@ export default function DashboardPage() {
 
           {/* Map overlay: data attribution note */}
           <div className="absolute bottom-8 left-3 z-[1000] text-[9px] font-mono text-storm-600 pointer-events-none">
-            Simulated data · Not for safety-critical decisions
+            Preview feed · Not for safety-critical decisions
           </div>
         </div>
 
