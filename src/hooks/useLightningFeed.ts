@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import type {
   AlertConfig,
   FeedStatus,
+  LightningFeedMeta,
   LightningStrike,
   MonitoredLocation,
   SafetyStatus,
@@ -39,6 +40,7 @@ export interface LightningFeedState {
   isLive: boolean;
   feedStatus: FeedStatus;
   feedMessage: string;
+  feedMeta: LightningFeedMeta | null;
   setAlertConfig: (cfg: AlertConfig) => void;
   setMonitoredLocation: (location: MonitoredLocation) => void;
 }
@@ -65,6 +67,7 @@ export function useLightningFeed(): LightningFeedState {
   const [alertConfig, setAlertConfigState] = useState<AlertConfig>(DEFAULT_CONFIG);
   const [newestStrikeId, setNewestStrikeId] = useState<string | null>(null);
   const [isLive, setIsLive] = useState(false);
+  const [feedMeta, setFeedMeta] = useState<LightningFeedMeta | null>(null);
   const [feedStatus, setFeedStatus] = useState<FeedStatus>(
     lightningServiceMode === 'demo' ? 'demo' : 'connecting',
   );
@@ -82,6 +85,7 @@ export function useLightningFeed(): LightningFeedState {
 
     setNewestStrikeId(null);
     setIsLive(lightningServiceMode === 'demo');
+    setFeedMeta(lightningService.getLatestMeta());
     setFeedStatus(lightningServiceMode === 'demo' ? 'demo' : 'connecting');
     setFeedMessage(
       lightningServiceMode === 'demo'
@@ -96,17 +100,35 @@ export function useLightningFeed(): LightningFeedState {
         }
 
         setStrikes(initial);
+        const latestMeta = lightningService.getLatestMeta();
+        setFeedMeta(latestMeta);
         if (lightningServiceMode === 'live') {
           setIsLive(true);
           setFeedStatus('live');
-          setFeedMessage('Live lightning feed');
+          if (latestMeta?.resultState === 'stale' && latestMeta.freshnessSeconds !== null) {
+            setFeedMessage(`Feed delayed by ${Math.ceil((latestMeta.freshnessSeconds ?? 0) / 60)} min`);
+          } else if (latestMeta?.resultState === 'empty') {
+            setFeedMessage(`No nearby strikes in the last ${QUERY_WINDOW_MINUTES} min`);
+          } else if (latestMeta?.cached) {
+            setFeedMessage(`Live lightning feed · cache ${latestMeta.cacheAgeSeconds ?? 0}s`);
+          } else {
+            setFeedMessage('Live lightning feed');
+          }
         }
 
         unsub = lightningService.subscribeToLiveStrikes(bounds, QUERY_WINDOW_MINUTES, (strike) => {
+          const currentMeta = lightningService.getLatestMeta();
+          setFeedMeta(currentMeta);
           if (lightningServiceMode === 'live') {
             setIsLive(true);
             setFeedStatus('live');
-            setFeedMessage('Live lightning feed');
+            if (currentMeta?.resultState === 'stale' && currentMeta.freshnessSeconds !== null) {
+              setFeedMessage(`Feed delayed by ${Math.ceil((currentMeta.freshnessSeconds ?? 0) / 60)} min`);
+            } else if (currentMeta?.cached) {
+              setFeedMessage(`Live lightning feed · cache ${currentMeta.cacheAgeSeconds ?? 0}s`);
+            } else {
+              setFeedMessage('Live lightning feed');
+            }
           }
 
           setStrikes((prev) => {
@@ -126,6 +148,7 @@ export function useLightningFeed(): LightningFeedState {
           setStrikes([]);
           setNewestStrikeId(null);
           setIsLive(false);
+          setFeedMeta(null);
           if (lightningServiceMode === 'demo') {
             setFeedStatus('demo');
             setFeedMessage('Demo feed only');
@@ -156,7 +179,7 @@ export function useLightningFeed(): LightningFeedState {
   }, []);
 
   const location = { lat: alertConfig.monitored.lat, lng: alertConfig.monitored.lng };
-  const safetyStatus = lightningService.getSafetyStatus(location, strikes, alertConfig);
+  const safetyStatus = lightningService.getSafetyStatus(location, strikes, alertConfig, feedMeta);
   const thunderETAs = lightningService.getThunderETAs(location, strikes);
 
   return {
@@ -168,6 +191,7 @@ export function useLightningFeed(): LightningFeedState {
     isLive,
     feedStatus,
     feedMessage,
+    feedMeta,
     setAlertConfig,
     setMonitoredLocation,
   };

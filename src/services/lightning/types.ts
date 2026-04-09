@@ -53,8 +53,33 @@ export interface ThunderETAEntry {
 // ── Safety ────────────────────────────────────────────────────────
 
 export type FeedStatus = 'connecting' | 'live' | 'unavailable' | 'demo';
+export type FeedProviderStatus = 'ok' | 'degraded';
+export type FeedResultState = 'active' | 'empty' | 'stale';
 export type SafetyLevel = 'safe' | 'caution' | 'warning' | 'danger';
 export type SafetyTrend = 'approaching' | 'departing' | 'steady';
+
+export interface LightningFeedMeta {
+  simulated: boolean;
+  source: string;
+  provider: string;
+  generatedAt: number;
+  providerStatus?: FeedProviderStatus;
+  resultState?: FeedResultState;
+  cached?: boolean;
+  cacheAgeSeconds?: number;
+  freshnessSeconds?: number | null;
+  latestStrikeAgeSeconds?: number | null;
+  trend?: SafetyTrend | 'unknown';
+  allClearMinutesRemaining?: number;
+  closestStrikeKm?: number | null;
+  strikeCountLast10min?: number;
+  dataQualityScore?: number;
+  queryMinutes?: number;
+  analysisRadiusKm?: number | null;
+  normalizedStrikeCount?: number;
+  filteredStrikeCount?: number;
+  notes?: string[];
+}
 
 export interface SafetyStatus {
   level: SafetyLevel;
@@ -90,6 +115,9 @@ export interface ILightningService {
   /** Fetch strikes within the given bounds from the last `minutes` minutes */
   getRecentStrikes(bounds: MapBounds, minutes: number): Promise<LightningStrike[]>;
 
+  /** Latest metadata returned alongside the most recent strike fetch. */
+  getLatestMeta(): LightningFeedMeta | null;
+
   /**
    * Subscribe to a live strike feed. Returns an unsubscribe function.
    * The callback is invoked each time a new strike is detected.
@@ -101,7 +129,12 @@ export interface ILightningService {
   ): () => void;
 
   /** Compute safety status for a location given current strikes */
-  getSafetyStatus(location: LatLng, strikes: LightningStrike[], config: AlertConfig): SafetyStatus;
+  getSafetyStatus(
+    location: LatLng,
+    strikes: LightningStrike[],
+    config: AlertConfig,
+    feedMeta?: LightningFeedMeta | null,
+  ): SafetyStatus;
 
   /** Compute the closest incoming thunder ETA entries, sorted by ETA ascending */
   getThunderETAs(location: LatLng, strikes: LightningStrike[]): ThunderETAEntry[];

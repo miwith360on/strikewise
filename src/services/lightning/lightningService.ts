@@ -14,6 +14,7 @@ import type {
   AlertConfig,
   ILightningService,
   LatLng,
+  LightningFeedMeta,
   LightningStrike,
   MapBounds,
   SafetyStatus,
@@ -37,6 +38,7 @@ let strikeCounter = 1000;
 
 class MockLightningService implements ILightningService {
   private _strikes: LightningStrike[] = [];
+  private _latestMeta: LightningFeedMeta | null = null;
 
   constructor() {
     // Pre-populate with a realistic spread
@@ -46,7 +48,38 @@ class MockLightningService implements ILightningService {
   // ── Public API ───────────────────────────────────────────────
 
   async getRecentStrikes(_bounds: MapBounds, _minutes: number): Promise<LightningStrike[]> {
-    return this._getFiltered();
+    const strikes = this._getFiltered();
+    const latestStrikeAgeSeconds = strikes[0]
+      ? Math.max(0, Math.round((Date.now() - strikes[0].timestamp) / 1000))
+      : null;
+
+    this._latestMeta = {
+      simulated: true,
+      source: 'mock-generator',
+      provider: 'mock',
+      generatedAt: Date.now(),
+      providerStatus: 'ok',
+      resultState: strikes.length > 0 ? 'active' : 'empty',
+      cached: false,
+      cacheAgeSeconds: 0,
+      freshnessSeconds: latestStrikeAgeSeconds,
+      latestStrikeAgeSeconds,
+      trend: 'unknown',
+      allClearMinutesRemaining: 0,
+      closestStrikeKm: null,
+      strikeCountLast10min: strikes.length,
+      dataQualityScore: 55,
+      queryMinutes: ALL_CLEAR_WINDOW_MINUTES,
+      normalizedStrikeCount: strikes.length,
+      filteredStrikeCount: 0,
+      notes: ['Demo mode only'],
+    };
+
+    return strikes;
+  }
+
+  getLatestMeta(): LightningFeedMeta | null {
+    return this._latestMeta;
   }
 
   subscribeToLiveStrikes(
@@ -69,8 +102,9 @@ class MockLightningService implements ILightningService {
     location: LatLng,
     strikes: LightningStrike[],
     config: AlertConfig,
+    feedMeta?: LightningFeedMeta | null,
   ): SafetyStatus {
-    return buildSafetyStatus(location, strikes, config);
+    return buildSafetyStatus(location, strikes, config, feedMeta);
   }
 
   getThunderETAs(location: LatLng, strikes: LightningStrike[]): ThunderETAEntry[] {

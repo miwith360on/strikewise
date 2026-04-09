@@ -59,7 +59,7 @@ export class XWeatherProvider implements LightningProvider {
       throw new Error(`xWeather API error: ${msg}`);
     }
 
-    const observations = data.response ?? [];
+    const observations = (data.response ?? []).filter((obs) => obs.ob.type === undefined || obs.ob.type === 'CG');
     const strikes: LightningStrike[] = observations.map((obs) =>
       this._toStrike(obs),
     );
@@ -71,6 +71,7 @@ export class XWeatherProvider implements LightningProvider {
       meta: {
         simulated: false,
         source: 'xweather-lightning-api',
+        providerStatus: 'ok',
         notes: [`${strikes.length} strikes from xWeather observations`],
       },
     };

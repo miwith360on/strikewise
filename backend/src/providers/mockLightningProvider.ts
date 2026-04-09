@@ -44,6 +44,7 @@ export class MockLightningProvider implements LightningProvider {
       meta: {
         simulated: true,
         source: 'mock-generator',
+        providerStatus: 'ok',
         notes: ['Backend mock provider. Safe for frontend integration before NOAA parsing is enabled.'],
       },
     };

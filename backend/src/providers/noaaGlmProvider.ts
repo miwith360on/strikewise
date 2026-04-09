@@ -43,6 +43,7 @@ export class NoaaGlmProvider implements LightningProvider {
       meta: {
         simulated: false,
         source: 'noaa-goes-glm',
+        providerStatus: 'degraded',
         bucket: env.NOAA_GLM_BUCKET,
         product: env.NOAA_GLM_PRODUCT,
         latestObjectKeys,

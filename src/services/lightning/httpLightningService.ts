@@ -10,6 +10,7 @@ import type {
   AlertConfig,
   ILightningService,
   LatLng,
+  LightningFeedMeta,
   LightningStrike,
   MapBounds,
   SafetyStatus,
@@ -22,6 +23,7 @@ const POLL_INTERVAL_MS = 10_000;
 export class HttpLightningService implements ILightningService {
   private readonly baseUrl: string;
   private _seenIds = new Set<string>();
+  private _latestMeta: LightningFeedMeta | null = null;
 
   constructor(baseUrl: string) {
     // Strip trailing slash so all paths are consistent
@@ -42,11 +44,25 @@ export class HttpLightningService implements ILightningService {
     const res = await fetch(`${this.baseUrl}/api/lightning?${params}`);
     if (!res.ok) throw new Error(`Lightning API responded with ${res.status}`);
 
-    const data = await res.json() as { strikes: LightningStrike[] };
+    const data = await res.json() as {
+      provider: string;
+      generatedAt: number;
+      strikes: LightningStrike[];
+      meta: Omit<LightningFeedMeta, 'provider' | 'generatedAt'>;
+    };
+    this._latestMeta = {
+      ...data.meta,
+      provider: data.provider,
+      generatedAt: data.generatedAt,
+    };
     for (const strike of data.strikes) {
       this._seenIds.add(strike.id);
     }
     return data.strikes;
+  }
+
+  getLatestMeta(): LightningFeedMeta | null {
+    return this._latestMeta;
   }
 
   subscribeToLiveStrikes(
@@ -82,8 +98,9 @@ export class HttpLightningService implements ILightningService {
     location: LatLng,
     strikes: LightningStrike[],
     config: AlertConfig,
+    feedMeta?: LightningFeedMeta | null,
   ): SafetyStatus {
-    return buildSafetyStatus(location, strikes, config);
+    return buildSafetyStatus(location, strikes, config, feedMeta);
   }
 
   getThunderETAs(location: LatLng, strikes: LightningStrike[]): ThunderETAEntry[] {

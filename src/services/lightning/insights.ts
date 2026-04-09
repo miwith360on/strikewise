@@ -1,6 +1,7 @@
 import type {
   AlertConfig,
   LatLng,
+  LightningFeedMeta,
   LightningStrike,
   SafetyStatus,
   ThunderETAEntry,
@@ -94,6 +95,7 @@ export function buildSafetyStatus(
   location: LatLng,
   strikes: LightningStrike[],
   config: AlertConfig,
+  feedMeta?: LightningFeedMeta | null,
 ): SafetyStatus {
   const now = Date.now();
   const tracked = strikes.filter((strike) => now - strike.timestamp < ALL_CLEAR_WINDOW_MS);
@@ -106,6 +108,7 @@ export function buildSafetyStatus(
     haversineKm(location.lat, location.lng, strike.lat, strike.lng),
   );
   const closestTracked = trackedDistances.length > 0 ? Math.min(...trackedDistances) : Infinity;
+  const closestTrackedFinal = feedMeta?.closestStrikeKm ?? closestTracked;
   const closestActive = activeDistances.length > 0 ? Math.min(...activeDistances) : Infinity;
   const nearbyTracked = tracked.filter((strike) =>
     haversineKm(location.lat, location.lng, strike.lat, strike.lng) <= config.cautionRadiusKm,
@@ -117,19 +120,23 @@ export function buildSafetyStatus(
     return latest;
   }, null);
 
-  const allClearMinutesRemaining = lastNearbyStrike === null
+  const localAllClearMinutesRemaining = lastNearbyStrike === null
     ? 0
     : Math.max(
         0,
         Math.ceil((ALL_CLEAR_WINDOW_MS - (now - lastNearbyStrike)) / 60000),
       );
+  const allClearMinutesRemaining = feedMeta?.allClearMinutesRemaining ?? localAllClearMinutesRemaining;
 
-  const changeRate = getTrend(location, tracked);
+  const changeRate = feedMeta?.trend && feedMeta.trend !== 'unknown'
+    ? feedMeta.trend
+    : getTrend(location, tracked);
+  const strikeCountLast10min = feedMeta?.strikeCountLast10min ?? active.length;
 
   let level: SafetyStatus['level'];
   if (closestActive <= config.dangerRadiusKm) level = 'danger';
   else if (closestActive <= config.warningRadiusKm) level = 'warning';
-  else if (closestActive <= config.cautionRadiusKm || allClearMinutesRemaining > 0) level = 'caution';
+  else if (closestTrackedFinal <= config.cautionRadiusKm || allClearMinutesRemaining > 0) level = 'caution';
   else level = 'safe';
 
   const recommendation = level === 'danger'
@@ -152,8 +159,8 @@ export function buildSafetyStatus(
 
   return {
     level,
-    closestStrikeKm: isFinite(closestTracked) ? roundKm(closestTracked) : 999,
-    strikeCountLast10min: active.length,
+    closestStrikeKm: isFinite(closestTrackedFinal) ? roundKm(closestTrackedFinal) : 999,
+    strikeCountLast10min,
     changeRate,
     recommendation,
     colorHex,
