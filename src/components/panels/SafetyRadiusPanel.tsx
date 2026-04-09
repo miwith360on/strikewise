@@ -16,17 +16,17 @@ const levelMeta = {
 };
 
 function TrendArrow({ trend }: { trend: SafetyStatus['changeRate'] }) {
-  if (trend === 'increasing') {
+  if (trend === 'approaching') {
     return (
       <span className="text-strike-danger text-xs font-mono flex items-center gap-0.5">
-        ↑ Increasing
+        ↑ Approaching
       </span>
     );
   }
-  if (trend === 'decreasing') {
+  if (trend === 'departing') {
     return (
       <span className="text-strike-safe text-xs font-mono flex items-center gap-0.5">
-        ↓ Decreasing
+        ↓ Moving away
       </span>
     );
   }
@@ -130,10 +130,10 @@ export function SafetyRadiusPanel({ status, alertConfig }: SafetyRadiusPanelProp
           </div>
           <div>
             <p className="text-lg font-display font-bold text-storm-200">
-              {Math.round(((Date.now() % 60000) / 60000) * 100)}
+              {status.allClearMinutesRemaining === 0 ? 'Clear' : `${status.allClearMinutesRemaining}m`}
             </p>
             <p className="text-[10px] uppercase tracking-widest text-storm-500 font-mono">
-              Threat %
+              All clear
             </p>
           </div>
         </div>

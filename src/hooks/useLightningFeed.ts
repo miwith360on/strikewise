@@ -1,17 +1,22 @@
 import { useCallback, useEffect, useState } from 'react';
 import type {
   AlertConfig,
+  FeedStatus,
   LightningStrike,
   MonitoredLocation,
   SafetyStatus,
   ThunderETAEntry,
 } from '@/services/lightning/types';
-import { lightningService } from '@/services/lightning/lightningService';
-import { DEFAULT_LOCATION } from '@/services/lightning/lightningService';
+import {
+  ALL_CLEAR_WINDOW_MS,
+  DEFAULT_LOCATION,
+  lightningService,
+  lightningServiceMode,
+} from '@/services/lightning/lightningService';
 import { haversineKm } from '@/services/lightning/mockData';
 import type { MapBounds } from '@/services/lightning/types';
 
-const QUERY_WINDOW_MINUTES = 10;
+const QUERY_WINDOW_MINUTES = 30;
 const QUERY_LAT_SPAN = 0.8;
 const QUERY_LNG_SPAN = 1.1;
 
@@ -32,6 +37,8 @@ export interface LightningFeedState {
   alertConfig: AlertConfig;
   newestStrikeId: string | null;
   isLive: boolean;
+  feedStatus: FeedStatus;
+  feedMessage: string;
   setAlertConfig: (cfg: AlertConfig) => void;
   setMonitoredLocation: (location: MonitoredLocation) => void;
 }
@@ -58,6 +65,14 @@ export function useLightningFeed(): LightningFeedState {
   const [alertConfig, setAlertConfigState] = useState<AlertConfig>(DEFAULT_CONFIG);
   const [newestStrikeId, setNewestStrikeId] = useState<string | null>(null);
   const [isLive, setIsLive] = useState(false);
+  const [feedStatus, setFeedStatus] = useState<FeedStatus>(
+    lightningServiceMode === 'demo' ? 'demo' : 'connecting',
+  );
+  const [feedMessage, setFeedMessage] = useState(
+    lightningServiceMode === 'demo'
+      ? 'Demo feed only'
+      : 'Connecting to live lightning feed',
+  );
 
   // Connect once so the service can choose HTTP or mock mode before subscribing.
   useEffect(() => {
@@ -66,7 +81,13 @@ export function useLightningFeed(): LightningFeedState {
     const bounds = getBoundsForLocation(alertConfig.monitored);
 
     setNewestStrikeId(null);
-    setIsLive(false);
+    setIsLive(lightningServiceMode === 'demo');
+    setFeedStatus(lightningServiceMode === 'demo' ? 'demo' : 'connecting');
+    setFeedMessage(
+      lightningServiceMode === 'demo'
+        ? 'Demo feed only'
+        : 'Connecting to live lightning feed',
+    );
 
     void lightningService.getRecentStrikes(bounds, QUERY_WINDOW_MINUTES)
       .then((initial) => {
@@ -75,23 +96,45 @@ export function useLightningFeed(): LightningFeedState {
         }
 
         setStrikes(initial);
-        unsub = lightningService.subscribeToLiveStrikes(bounds, (strike) => {
+        if (lightningServiceMode === 'live') {
           setIsLive(true);
+          setFeedStatus('live');
+          setFeedMessage('Live lightning feed');
+        }
+
+        unsub = lightningService.subscribeToLiveStrikes(bounds, QUERY_WINDOW_MINUTES, (strike) => {
+          if (lightningServiceMode === 'live') {
+            setIsLive(true);
+            setFeedStatus('live');
+            setFeedMessage('Live lightning feed');
+          }
+
           setStrikes((prev) => {
             if (prev.some((existing) => existing.id === strike.id)) {
               return prev;
             }
 
-            const cutoff = Date.now() - 10 * 60 * 1000;
+            const cutoff = Date.now() - ALL_CLEAR_WINDOW_MS;
             const pruned = prev.filter((s) => s.timestamp > cutoff);
             return [...pruned, strike];
           });
           setNewestStrikeId(strike.id);
         });
       })
-      .catch(() => {
+      .catch((error: unknown) => {
         if (!cancelled) {
           setStrikes([]);
+          setNewestStrikeId(null);
+          setIsLive(false);
+          if (lightningServiceMode === 'demo') {
+            setFeedStatus('demo');
+            setFeedMessage('Demo feed only');
+          } else {
+            setFeedStatus('unavailable');
+            setFeedMessage(
+              error instanceof Error ? error.message : 'Live lightning feed unavailable',
+            );
+          }
         }
       });
 
@@ -123,6 +166,8 @@ export function useLightningFeed(): LightningFeedState {
     alertConfig,
     newestStrikeId,
     isLive,
+    feedStatus,
+    feedMessage,
     setAlertConfig,
     setMonitoredLocation,
   };

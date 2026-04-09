@@ -1,18 +1,9 @@
-import { useEffect, useRef, useState } from 'react';
 import type { ThunderETAEntry } from '@/services/lightning/types';
 import { Card } from '@/components/ui/Card';
 import { ClockIcon } from '@/components/ui/Icons';
 
 interface ThunderETAPanelProps {
   etas: ThunderETAEntry[];
-}
-
-function formatETA(seconds: number): string {
-  if (seconds <= 0) return 'Now';
-  if (seconds < 60) return `${Math.round(seconds)}s`;
-  const m = Math.floor(seconds / 60);
-  const s = Math.round(seconds % 60);
-  return `${m}m ${s}s`;
 }
 
 function ETARow({ entry }: { entry: ThunderETAEntry }) {
@@ -51,27 +42,13 @@ function ETARow({ entry }: { entry: ThunderETAEntry }) {
           'text-bolt-500'
         }`}
       >
-        {formatETA(entry.etaSeconds)}
+        {entry.etaRangeLabel}
       </span>
     </div>
   );
 }
 
 export function ThunderETAPanel({ etas }: ThunderETAPanelProps) {
-  const [tick, setTick] = useState(0);
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-
-  // Refresh display every second for live countdown
-  useEffect(() => {
-    intervalRef.current = setInterval(() => setTick((t) => t + 1), 1000);
-    return () => {
-      if (intervalRef.current) clearInterval(intervalRef.current);
-    };
-  }, []);
-
-  // Keep ESLint happy — tick is used to trigger re-render
-  void tick;
-
   const nearest = etas[0];
 
   return (
@@ -103,7 +80,7 @@ export function ThunderETAPanel({ etas }: ThunderETAPanelProps) {
                   'text-bolt-500 glow-bolt'
                 }`}
               >
-                {formatETA(nearest.etaSeconds)}
+                {nearest.etaRangeLabel}
               </p>
               <p className="text-xs text-storm-400 mt-1 font-mono">
                 {Math.round(nearest.distanceKm * 10) / 10} km · {Math.round(nearest.intensityKa)} kA

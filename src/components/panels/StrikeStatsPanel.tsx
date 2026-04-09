@@ -1,9 +1,10 @@
-import type { LightningStrike } from '@/services/lightning/types';
+import type { FeedStatus, LightningStrike } from '@/services/lightning/types';
 import { BoltIcon } from '@/components/ui/Icons';
 
 interface StrikeStatsPanelProps {
   strikes: LightningStrike[];
   isLive: boolean;
+  feedStatus: FeedStatus;
 }
 
 function timeAgo(ts: number): string {
@@ -13,7 +14,7 @@ function timeAgo(ts: number): string {
   return `${Math.floor(diffSec / 60)}m ago`;
 }
 
-export function StrikeStatsPanel({ strikes, isLive }: StrikeStatsPanelProps) {
+export function StrikeStatsPanel({ strikes, isLive, feedStatus }: StrikeStatsPanelProps) {
   const sorted = [...strikes].sort((a, b) => b.timestamp - a.timestamp);
   const recent = sorted.slice(0, 5);
   const avgIntensity =
@@ -58,7 +59,9 @@ export function StrikeStatsPanel({ strikes, isLive }: StrikeStatsPanelProps) {
       {/* Strike feed */}
       <div className="space-y-1">
         {recent.length === 0 && (
-          <p className="text-xs text-storm-500 font-mono text-center py-2">Waiting for data…</p>
+          <p className="text-xs text-storm-500 font-mono text-center py-2">
+            {feedStatus === 'unavailable' ? 'Live feed unavailable' : 'Waiting for data…'}
+          </p>
         )}
         {recent.map((s, i) => (
           <div

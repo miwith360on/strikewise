@@ -2,13 +2,14 @@ import { useNavigate } from 'react-router-dom';
 import { BoltIcon, LocationIcon } from '@/components/ui/Icons';
 import { SafetyBadge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
-import type { SafetyStatus, MonitoredLocation } from '@/services/lightning/types';
+import type { FeedStatus, SafetyStatus, MonitoredLocation } from '@/services/lightning/types';
 
 interface HeaderProps {
   location: MonitoredLocation;
   status: SafetyStatus;
   strikeCount: number;
-  isLive: boolean;
+  feedStatus: FeedStatus;
+  feedMessage: string;
   onRequestGPS: () => void;
   gpsLoading: boolean;
 }
@@ -17,7 +18,8 @@ export function Header({
   location,
   status,
   strikeCount,
-  isLive,
+  feedStatus,
+  feedMessage,
   onRequestGPS,
   gpsLoading,
 }: HeaderProps) {
@@ -46,10 +48,18 @@ export function Header({
           </span>
         </div>
         <div className="flex items-center gap-2">
-          {isLive ? (
+          {feedStatus === 'live' ? (
             <span className="flex items-center gap-1 text-[10px] font-mono text-strike-safe uppercase tracking-wider">
               <span className="w-1.5 h-1.5 rounded-full bg-strike-safe animate-pulse" />
               Live
+            </span>
+          ) : feedStatus === 'demo' ? (
+            <span className="text-[10px] font-mono text-bolt-500 uppercase tracking-wider">
+              Demo feed
+            </span>
+          ) : feedStatus === 'unavailable' ? (
+            <span className="text-[10px] font-mono text-strike-warning uppercase tracking-wider">
+              Feed unavailable
             </span>
           ) : (
             <span className="text-[10px] font-mono text-storm-500 uppercase tracking-wider">
@@ -59,6 +69,9 @@ export function Header({
           <span className="text-[10px] font-mono text-storm-500">
             {strikeCount} strikes / 10 min
           </span>
+        </div>
+        <div className="text-[10px] font-mono text-storm-500 truncate max-w-[220px]">
+          {feedMessage}
         </div>
       </div>
 

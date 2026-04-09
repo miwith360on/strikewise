@@ -54,6 +54,8 @@ export default function DashboardPage() {
     alertConfig,
     newestStrikeId,
     isLive,
+    feedStatus,
+    feedMessage,
     setAlertConfig,
     setMonitoredLocation,
   } = useLightningFeed();
@@ -82,8 +84,9 @@ export default function DashboardPage() {
       <Header
         location={alertConfig.monitored}
         status={safetyStatus}
-        strikeCount={strikes.length}
-        isLive={isLive}
+        strikeCount={safetyStatus.strikeCountLast10min}
+        feedStatus={feedStatus}
+        feedMessage={feedMessage}
         onRequestGPS={requestGPS}
         gpsLoading={gpsLoading}
       />
@@ -107,10 +110,10 @@ export default function DashboardPage() {
           {/* Map overlay: strike counter badge */}
           <div className="absolute top-3 right-3 z-[1000] glass-card border border-storm-600 px-3 py-1.5 rounded-xl flex items-center gap-2 shadow-card pointer-events-none">
             <span className="text-bolt-500 font-mono font-bold text-sm tabular-nums">
-              {strikes.length}
+              {safetyStatus.strikeCountLast10min}
             </span>
             <span className="text-[10px] font-mono uppercase tracking-widest text-storm-400">
-              strikes
+              active / 10 min
             </span>
           </div>
 
@@ -153,7 +156,7 @@ export default function DashboardPage() {
 
           {/* Strike feed */}
           <CollapsibleSection title="Strike Feed" defaultOpen={false}>
-            <StrikeStatsPanel strikes={strikes} isLive={isLive} />
+            <StrikeStatsPanel strikes={strikes} isLive={isLive} feedStatus={feedStatus} />
           </CollapsibleSection>
 
           {/* Alert config */}

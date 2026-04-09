@@ -44,6 +44,7 @@ export interface ThunderETAEntry {
   distanceKm: number;
   /** Seconds until thunder arrives at the monitored location (negative = already heard) */
   etaSeconds: number;
+  etaRangeLabel: string;
   intensityKa: number;
   lat: number;
   lng: number;
@@ -51,15 +52,18 @@ export interface ThunderETAEntry {
 
 // ── Safety ────────────────────────────────────────────────────────
 
+export type FeedStatus = 'connecting' | 'live' | 'unavailable' | 'demo';
 export type SafetyLevel = 'safe' | 'caution' | 'warning' | 'danger';
+export type SafetyTrend = 'approaching' | 'departing' | 'steady';
 
 export interface SafetyStatus {
   level: SafetyLevel;
   closestStrikeKm: number;
   strikeCountLast10min: number;
-  changeRate: 'increasing' | 'decreasing' | 'steady';
+  changeRate: SafetyTrend;
   recommendation: string;
   colorHex: string;
+  allClearMinutesRemaining: number;
 }
 
 // ── Alert Config ──────────────────────────────────────────────────
@@ -92,6 +96,7 @@ export interface ILightningService {
    */
   subscribeToLiveStrikes(
     bounds: MapBounds,
+    minutes: number,
     onStrike: (strike: LightningStrike) => void,
   ): () => void;
 
