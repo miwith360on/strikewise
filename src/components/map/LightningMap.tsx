@@ -1,10 +1,14 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { divIcon } from 'leaflet';
 import {
   Circle,
   CircleMarker,
   MapContainer,
+  Marker,
+  Polygon,
   Popup,
   TileLayer,
+  Tooltip,
   useMap,
   useMapEvents,
 } from 'react-leaflet';
@@ -15,6 +19,36 @@ import type {
   MonitoredLocation,
 } from '@/services/lightning/types';
 import { haversineKm } from '@/services/lightning/mockData';
+
+const ML_PREDICTION_URL = 'https://strikewise-production-c7d3.up.railway.app/ml/predict';
+const ML_POLL_INTERVAL_MS = 60_000;
+const PREDICTION_STROKE = '#b56cff';
+const predictionLabelIcon = divIcon({
+  className: 'storm-prediction-label',
+  html: '<div></div>',
+  iconSize: [0, 0],
+});
+
+interface MlPredictionResponse {
+  ready: boolean;
+  confidence?: number;
+  predictedBoundingBox?: {
+    north: number;
+    south: number;
+    east: number;
+    west: number;
+  };
+}
+
+interface PredictionOverlayData {
+  bounds: {
+    north: number;
+    south: number;
+    east: number;
+    west: number;
+  };
+  confidencePercent: number;
+}
 
 // ── Map auto-centering ────────────────────────────────────────────
 function MapCenterEffect({ center }: { center: [number, number] }) {
@@ -96,6 +130,53 @@ const RADIUS_RINGS = [
   { key: 'caution', color: '#ffe033', label: 'Caution' },
 ] as const;
 
+function PredictionOverlay({ prediction }: { prediction: PredictionOverlayData }) {
+  const { north, south, east, west } = prediction.bounds;
+  const polygon: [number, number][] = [
+    [north, west],
+    [north, east],
+    [south, east],
+    [south, west],
+  ];
+  const center: [number, number] = [
+    (north + south) / 2,
+    (east + west) / 2,
+  ];
+
+  return (
+    <>
+      <Polygon
+        positions={polygon}
+        pathOptions={{
+          color: PREDICTION_STROKE,
+          fillColor: PREDICTION_STROKE,
+          fillOpacity: 0.18,
+          weight: 2,
+          opacity: 0.85,
+          dashArray: '10 8',
+        }}
+      />
+      <Marker position={center} icon={predictionLabelIcon} interactive={false}>
+        <Tooltip
+          permanent
+          direction="center"
+          opacity={1}
+          className="!bg-transparent !border-0 !shadow-none"
+        >
+          <div className="rounded-xl border border-[#d2b6ff]/40 bg-[#2d1247]/85 px-3 py-2 text-center shadow-[0_12px_35px_rgba(98,38,138,0.28)] backdrop-blur-sm">
+            <div className="text-[10px] font-mono uppercase tracking-[0.22em] text-[#f0dcff]">
+              Predicted Zone
+            </div>
+            <div className="mt-1 text-xs font-mono text-[#cfa7ff]">
+              {prediction.confidencePercent}% confidence
+            </div>
+          </div>
+        </Tooltip>
+      </Marker>
+    </>
+  );
+}
+
 // ── Main component ────────────────────────────────────────────────
 interface LightningMapProps {
   strikes: LightningStrike[];
@@ -117,6 +198,52 @@ export function LightningMap({
   onMoveMonitoredLocation,
 }: LightningMapProps) {
   const center: [number, number] = [monitored.lat, monitored.lng];
+  const [prediction, setPrediction] = useState<PredictionOverlayData | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadPrediction = async () => {
+      try {
+        const response = await fetch(ML_PREDICTION_URL);
+        if (!response.ok) {
+          throw new Error(`Prediction API responded with ${response.status}`);
+        }
+
+        const payload = await response.json() as MlPredictionResponse;
+        if (cancelled) {
+          return;
+        }
+
+        if (!payload.ready || !payload.predictedBoundingBox) {
+          setPrediction(null);
+          return;
+        }
+
+        const rawConfidence = payload.confidence ?? 0;
+        const confidencePercent = Math.round(rawConfidence <= 1 ? rawConfidence * 100 : rawConfidence);
+
+        setPrediction({
+          bounds: payload.predictedBoundingBox,
+          confidencePercent,
+        });
+      } catch {
+        if (!cancelled) {
+          setPrediction(null);
+        }
+      }
+    };
+
+    void loadPrediction();
+    const interval = window.setInterval(() => {
+      void loadPrediction();
+    }, ML_POLL_INTERVAL_MS);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+    };
+  }, []);
 
   return (
     <MapContainer
@@ -134,6 +261,8 @@ export function LightningMap({
 
       <MapCenterEffect center={center} />
       <MapClickCapture onMoveMonitoredLocation={onMoveMonitoredLocation} />
+
+      {prediction && <PredictionOverlay prediction={prediction} />}
 
       {/* Safety radius rings (largest first so smaller ones render on top) */}
       {RADIUS_RINGS.slice().reverse().map(({ key, color }) => {
