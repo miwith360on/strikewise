@@ -20,6 +20,30 @@ import { buildSafetyStatus, buildThunderETAs } from './insights';
 
 const POLL_INTERVAL_MS = 10_000;
 
+function isValidLatitude(value: number) {
+  return Number.isFinite(value) && value >= -90 && value <= 90;
+}
+
+function isValidLongitude(value: number) {
+  return Number.isFinite(value) && value >= -180 && value <= 180;
+}
+
+function hasValidBounds(bounds: MapBounds) {
+  const north = bounds.northEast.lat;
+  const south = bounds.southWest.lat;
+  const east = bounds.northEast.lng;
+  const west = bounds.southWest.lng;
+
+  return (
+    isValidLatitude(north) &&
+    isValidLatitude(south) &&
+    isValidLongitude(east) &&
+    isValidLongitude(west) &&
+    north >= south &&
+    east >= west
+  );
+}
+
 export class HttpLightningService implements ILightningService {
   private readonly baseUrl: string;
   private _seenIds = new Set<string>();
@@ -34,12 +58,15 @@ export class HttpLightningService implements ILightningService {
 
   async getRecentStrikes(bounds: MapBounds, minutes: number): Promise<LightningStrike[]> {
     const params = new URLSearchParams({
-      north: String(bounds.northEast.lat),
-      south: String(bounds.southWest.lat),
-      east: String(bounds.northEast.lng),
-      west: String(bounds.southWest.lng),
       minutes: String(minutes),
     });
+
+    if (hasValidBounds(bounds)) {
+      params.set('north', String(bounds.northEast.lat));
+      params.set('south', String(bounds.southWest.lat));
+      params.set('east', String(bounds.northEast.lng));
+      params.set('west', String(bounds.southWest.lng));
+    }
 
     const res = await fetch(`${this.baseUrl}/api/lightning?${params}`);
     if (!res.ok) throw new Error(`Lightning API responded with ${res.status}`);
