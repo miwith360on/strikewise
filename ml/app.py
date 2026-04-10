@@ -329,6 +329,8 @@ async def lifespan(_: FastAPI):
 
 
 app = FastAPI(title="Strikewise ML", version="0.1.0", lifespan=lifespan)
+from fastapi.middleware.cors import CORSMiddleware
+app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
 
 @app.get("/ml/status")
