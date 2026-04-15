@@ -56,15 +56,28 @@ lightningRouter.get('/', async (request, response, next) => {
     const cacheKey = toQueryKey(normalizedQuery);
     const cachedEntry = responseCache.get(cacheKey);
     const isCacheHit = cachedEntry !== undefined && Date.now() - cachedEntry.cachedAt < CACHE_TTL_MS;
-    const payload = isCacheHit
-      ? cachedEntry.payload
-      : await provider.getRecentStrikes(normalizedQuery);
 
-    if (!isCacheHit) {
-      responseCache.set(cacheKey, {
-        cachedAt: Date.now(),
-        payload,
-      });
+    let payload: LightningResponse;
+    if (isCacheHit) {
+      payload = cachedEntry.payload;
+    } else {
+      try {
+        payload = await provider.getRecentStrikes(normalizedQuery);
+        responseCache.set(cacheKey, { cachedAt: Date.now(), payload });
+      } catch (providerError) {
+        const msg = providerError instanceof Error ? providerError.message : 'Provider error';
+        payload = {
+          provider: 'error',
+          generatedAt: Date.now(),
+          strikes: [],
+          meta: {
+            simulated: false,
+            source: 'provider-error',
+            providerStatus: 'degraded',
+            notes: [`Provider failed: ${msg}`],
+          },
+        };
+      }
     }
 
     const analyzedPayload = enrichLightningResponse(
