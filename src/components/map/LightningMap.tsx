@@ -20,7 +20,7 @@ import type {
 } from '@/services/lightning/types';
 import { haversineKm } from '@/services/lightning/mockData';
 
-const ML_PREDICTION_URL = 'https://strikewise-production-c7d3.up.railway.app/ml/predict';
+const ML_PREDICTION_URL = 'https://strikewise-production-fc9c.up.railway.app/ml/predict';
 const ML_POLL_INTERVAL_MS = 60_000;
 const PREDICTION_STROKE = '#b56cff';
 const predictionLabelIcon = divIcon({
