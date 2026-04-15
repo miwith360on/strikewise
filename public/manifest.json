@@ -1,0 +1,18 @@
+{
+  "name": "Strikewise — Lightning Intelligence",
+  "short_name": "Strikewise",
+  "description": "Real-time lightning tracking and storm prediction",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#07080d",
+  "theme_color": "#07080d",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "/bolt.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

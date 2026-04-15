@@ -14,6 +14,22 @@ function timeAgo(ts: number): string {
   return `${Math.floor(diffSec / 60)}m ago`;
 }
 
+/** Strikes per minute over the last `windowMs`, split into two halves for trend. */
+function computeStrikeRate(strikes: LightningStrike[], windowMs = 5 * 60 * 1000) {
+  const now = Date.now();
+  const cutoff = now - windowMs;
+  const halfpoint = now - windowMs / 2;
+  const recent = strikes.filter((s) => s.timestamp >= cutoff);
+  const firstHalf = recent.filter((s) => s.timestamp < halfpoint).length;
+  const secondHalf = recent.filter((s) => s.timestamp >= halfpoint).length;
+  const windowMin = windowMs / 60_000;
+  const rate = parseFloat((recent.length / windowMin).toFixed(1));
+  let trend: 'rising' | 'falling' | 'steady' = 'steady';
+  if (secondHalf > firstHalf * 1.3) trend = 'rising';
+  else if (secondHalf < firstHalf * 0.7) trend = 'falling';
+  return { rate, trend, count: recent.length };
+}
+
 export function StrikeStatsPanel({ strikes, isLive, feedStatus }: StrikeStatsPanelProps) {
   const sorted = [...strikes].sort((a, b) => b.timestamp - a.timestamp);
   const recent = sorted.slice(0, 5);
@@ -24,6 +40,10 @@ export function StrikeStatsPanel({ strikes, isLive, feedStatus }: StrikeStatsPan
   const maxIntensity = strikes.length > 0
     ? Math.round(Math.max(...strikes.map((s) => s.intensityKa)))
     : 0;
+
+  const { rate, trend } = computeStrikeRate(strikes);
+  const trendIcon = trend === 'rising' ? '↑' : trend === 'falling' ? '↓' : '→';
+  const trendColor = trend === 'rising' ? 'text-red-400' : trend === 'falling' ? 'text-green-400' : 'text-storm-400';
 
   return (
     <div className="glass-card border border-white/5 p-4 space-y-3">
@@ -39,6 +59,16 @@ export function StrikeStatsPanel({ strikes, isLive, feedStatus }: StrikeStatsPan
           </span>
         )}
       </div>
+
+      {/* Strike rate */}
+      {strikes.length > 0 && (
+        <div className="flex items-center justify-between rounded-lg bg-storm-900/60 px-3 py-2 border border-storm-700">
+          <span className="text-[10px] font-mono uppercase tracking-wider text-storm-400">Strike Rate</span>
+          <span className={`font-mono text-sm font-bold ${trendColor}`}>
+            {rate}/min <span className="text-base">{trendIcon}</span>
+          </span>
+        </div>
+      )}
 
       {/* Summary stats */}
       <div className="grid grid-cols-3 gap-2 border-b border-storm-700 pb-3">

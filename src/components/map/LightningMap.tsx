@@ -6,6 +6,7 @@ import {
   MapContainer,
   Marker,
   Polygon,
+  Polyline,
   Popup,
   TileLayer,
   Tooltip,
@@ -23,6 +24,7 @@ import { haversineKm } from '@/services/lightning/mockData';
 const ML_PREDICTION_URL = 'https://strikewise-production-fc9c.up.railway.app/ml/predict';
 const ML_POLL_INTERVAL_MS = 60_000;
 const PREDICTION_STROKE = '#b56cff';
+const CLUSTER_STROKE = '#ff9f43';
 const predictionLabelIcon = divIcon({
   className: 'storm-prediction-label',
   html: '<div></div>',
@@ -38,6 +40,9 @@ interface MlPredictionResponse {
     east: number;
     west: number;
   };
+  predictedCenter?: { lat: number; lng: number };
+  clusterSamples?: number;
+  timeBuckets?: number;
 }
 
 interface PredictionOverlayData {
@@ -47,10 +52,105 @@ interface PredictionOverlayData {
     east: number;
     west: number;
   };
+  center: { lat: number; lng: number };
   confidencePercent: number;
 }
 
-// ── Map auto-centering ────────────────────────────────────────────
+// ── Strike trail: fading polyline showing storm motion ────────────
+function StrikeTrail({ strikes }: { strikes: LightningStrike[] }) {
+  // Sort by time, keep last 30 min, bucket into 3-min slots to draw a motion path
+  const now = Date.now();
+  const windowMs = 30 * 60 * 1000;
+  const bucketMs = 3 * 60 * 1000;
+  const numBuckets = windowMs / bucketMs; // 10 buckets
+
+  const buckets: LightningStrike[][] = Array.from({ length: numBuckets }, () => []);
+  for (const s of strikes) {
+    const age = now - s.timestamp;
+    if (age > windowMs) continue;
+    const bucket = Math.min(numBuckets - 1, Math.floor(age / bucketMs));
+    // Bucket 0 = most recent, higher = older
+    buckets[bucket].push(s);
+  }
+
+  // Compute centroid per bucket (oldest → newest for path direction)
+  const centroids: [number, number][] = [];
+  for (let i = numBuckets - 1; i >= 0; i--) {
+    const bucket = buckets[i];
+    if (bucket.length === 0) continue;
+    const lat = bucket.reduce((s, x) => s + x.lat, 0) / bucket.length;
+    const lng = bucket.reduce((s, x) => s + x.lng, 0) / bucket.length;
+    centroids.push([lat, lng]);
+  }
+
+  if (centroids.length < 2) return null;
+
+  return (
+    <Polyline
+      positions={centroids}
+      pathOptions={{
+        color: CLUSTER_STROKE,
+        weight: 3,
+        opacity: 0.7,
+        dashArray: '8 6',
+      }}
+    />
+  );
+}
+
+// ── Storm cell overlay from ML clustering ─────────────────────────
+function StormCellOverlay({ prediction }: { prediction: PredictionOverlayData }) {
+  const { north, south, east, west } = prediction.bounds;
+  const { lat: cLat, lng: cLng } = prediction.center;
+
+  // Draw the cluster bounding box
+  const polygon: [number, number][] = [
+    [north, west],
+    [north, east],
+    [south, east],
+    [south, west],
+  ];
+
+  // Direction arrow: small offset from center toward predicted movement
+  // (We don't have previous center, so just show a motion hint label)
+  const centerPos: [number, number] = [cLat, cLng];
+
+  return (
+    <>
+      {/* Predicted zone box */}
+      <Polygon
+        positions={polygon}
+        pathOptions={{
+          color: PREDICTION_STROKE,
+          fillColor: PREDICTION_STROKE,
+          fillOpacity: 0.12,
+          weight: 2,
+          opacity: 0.8,
+          dashArray: '10 8',
+        }}
+      />
+      {/* Storm cell label at center */}
+      <Marker position={centerPos} icon={predictionLabelIcon} interactive={false}>
+        <Tooltip
+          permanent
+          direction="center"
+          opacity={1}
+          className="!bg-transparent !border-0 !shadow-none"
+        >
+          <div className="rounded-xl border border-[#d2b6ff]/40 bg-[#2d1247]/85 px-3 py-2 text-center shadow-[0_12px_35px_rgba(98,38,138,0.28)] backdrop-blur-sm">
+            <div className="text-[10px] font-mono uppercase tracking-[0.22em] text-[#f0dcff]">
+              Storm Cell
+            </div>
+            <div className="mt-1 text-xs font-mono text-[#cfa7ff]">
+              {prediction.confidencePercent}% confidence
+            </div>
+          </div>
+        </Tooltip>
+      </Marker>
+    </>
+  );
+}
+
 function MapCenterEffect({ center }: { center: [number, number] }) {
   const map = useMap();
   const prevCenter = useRef(center);
@@ -130,53 +230,6 @@ const RADIUS_RINGS = [
   { key: 'caution', color: '#ffe033', label: 'Caution' },
 ] as const;
 
-function PredictionOverlay({ prediction }: { prediction: PredictionOverlayData }) {
-  const { north, south, east, west } = prediction.bounds;
-  const polygon: [number, number][] = [
-    [north, west],
-    [north, east],
-    [south, east],
-    [south, west],
-  ];
-  const center: [number, number] = [
-    (north + south) / 2,
-    (east + west) / 2,
-  ];
-
-  return (
-    <>
-      <Polygon
-        positions={polygon}
-        pathOptions={{
-          color: PREDICTION_STROKE,
-          fillColor: PREDICTION_STROKE,
-          fillOpacity: 0.18,
-          weight: 2,
-          opacity: 0.85,
-          dashArray: '10 8',
-        }}
-      />
-      <Marker position={center} icon={predictionLabelIcon} interactive={false}>
-        <Tooltip
-          permanent
-          direction="center"
-          opacity={1}
-          className="!bg-transparent !border-0 !shadow-none"
-        >
-          <div className="rounded-xl border border-[#d2b6ff]/40 bg-[#2d1247]/85 px-3 py-2 text-center shadow-[0_12px_35px_rgba(98,38,138,0.28)] backdrop-blur-sm">
-            <div className="text-[10px] font-mono uppercase tracking-[0.22em] text-[#f0dcff]">
-              Predicted Zone
-            </div>
-            <div className="mt-1 text-xs font-mono text-[#cfa7ff]">
-              {prediction.confidencePercent}% confidence
-            </div>
-          </div>
-        </Tooltip>
-      </Marker>
-    </>
-  );
-}
-
 // ── Main component ────────────────────────────────────────────────
 interface LightningMapProps {
   strikes: LightningStrike[];
@@ -206,43 +259,30 @@ export function LightningMap({
     const loadPrediction = async () => {
       try {
         const response = await fetch(ML_PREDICTION_URL);
-        if (!response.ok) {
-          throw new Error(`Prediction API responded with ${response.status}`);
-        }
-
+        if (!response.ok) return;
         const payload = await response.json() as MlPredictionResponse;
-        if (cancelled) {
-          return;
-        }
+        if (cancelled) return;
 
-        if (!payload.ready || !payload.predictedBoundingBox) {
+        if (!payload.ready || !payload.predictedBoundingBox || !payload.predictedCenter) {
           setPrediction(null);
           return;
         }
 
         const rawConfidence = payload.confidence ?? 0;
         const confidencePercent = Math.round(rawConfidence <= 1 ? rawConfidence * 100 : rawConfidence);
-
         setPrediction({
           bounds: payload.predictedBoundingBox,
+          center: payload.predictedCenter,
           confidencePercent,
         });
       } catch {
-        if (!cancelled) {
-          setPrediction(null);
-        }
+        if (!cancelled) setPrediction(null);
       }
     };
 
     void loadPrediction();
-    const interval = window.setInterval(() => {
-      void loadPrediction();
-    }, ML_POLL_INTERVAL_MS);
-
-    return () => {
-      cancelled = true;
-      window.clearInterval(interval);
-    };
+    const interval = window.setInterval(() => { void loadPrediction(); }, ML_POLL_INTERVAL_MS);
+    return () => { cancelled = true; window.clearInterval(interval); };
   }, []);
 
   return (
@@ -262,7 +302,11 @@ export function LightningMap({
       <MapCenterEffect center={center} />
       <MapClickCapture onMoveMonitoredLocation={onMoveMonitoredLocation} />
 
-      {prediction && <PredictionOverlay prediction={prediction} />}
+      {/* Animated strike trail showing storm motion */}
+      <StrikeTrail strikes={strikes} />
+
+      {/* Storm cell + predicted zone overlay from ML */}
+      {prediction && <StormCellOverlay prediction={prediction} />}
 
       {/* Safety radius rings (largest first so smaller ones render on top) */}
       {RADIUS_RINGS.slice().reverse().map(({ key, color }) => {
