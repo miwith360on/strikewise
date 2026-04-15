@@ -3,9 +3,14 @@ import type { LightningProvider } from '../types/lightning.js';
 import { BlitzortungProvider } from './blitzortungProvider.js';
 import { MockLightningProvider } from './mockLightningProvider.js';
 import { NoaaGlmProvider } from './noaaGlmProvider.js';
+import { OpenMeteoProvider } from './openMeteoProvider.js';
 import { XWeatherProvider } from './xweatherProvider.js';
 
 export function createLightningProvider(): LightningProvider {
+  if (env.LIGHTNING_PROVIDER === 'open-meteo') {
+    return new OpenMeteoProvider();
+  }
+
   if (env.LIGHTNING_PROVIDER === 'blitzortung') {
     return new BlitzortungProvider();
   }
