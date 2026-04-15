@@ -333,6 +333,18 @@ from fastapi.middleware.cors import CORSMiddleware
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
 
+@app.get("/")
+def root() -> dict[str, Any]:
+    return {
+        "service": "Strikewise ML",
+        "version": "0.1.0",
+        "endpoints": {
+            "status": "/ml/status",
+            "predict": "/ml/predict",
+        },
+    }
+
+
 @app.get("/ml/status")
 def ml_status() -> dict[str, Any]:
     return get_status()
