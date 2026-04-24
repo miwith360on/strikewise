@@ -21,6 +21,7 @@ import type {
   LightningResponse,
   LightningStrike,
 } from '../types/lightning.js';
+import { OpenMeteoProvider } from './openMeteoProvider.js';
 
 const BASE_URL = 'https://api.tomorrow.io/v4/timelines';
 
@@ -145,6 +146,23 @@ export class TomorrowProvider implements LightningProvider {
 
     if (!res.ok) {
       const text = await res.text().catch(() => '');
+
+      // Free-tier Tomorrow accounts may not include Lightning fields.
+      // Fall back to Open-Meteo so the API still returns useful data.
+      if (res.status === 403 && /not allowed/i.test(text)) {
+        const fallback = await new OpenMeteoProvider().getRecentStrikes(query);
+        return {
+          ...fallback,
+          meta: {
+            ...fallback.meta,
+            notes: [
+              'Tomorrow plan does not include lightning fields; using Open-Meteo fallback.',
+              ...(fallback.meta.notes ?? []),
+            ],
+          },
+        };
+      }
+
       throw new Error(`Tomorrow.io API error ${res.status}: ${text.slice(0, 200)}`);
     }
 
