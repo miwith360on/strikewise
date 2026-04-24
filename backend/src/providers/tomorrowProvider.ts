@@ -1,7 +1,7 @@
 // ─────────────────────────────────────────────────────────────────
 // Tomorrow.io Lightning Provider
 //
-// Calls the Tomorrow.io Timelines API for `lightningFlashRate`
+// Calls the Tomorrow.io Timelines API for `lightningFlashRateDensity`
 // (flashes per minute per km²) at the query center point.
 // Because Tomorrow.io gives a rate scalar — not individual strike
 // positions — this provider generates spatially distributed
@@ -32,7 +32,7 @@ const MAX_STRIKES = 60;
 interface TomorrowInterval {
   startTime: string;
   values: {
-    lightningFlashRate?: number; // flashes / min / km²
+    lightningFlashRateDensity?: number; // flashes / 5 min / km²
   };
 }
 
@@ -130,7 +130,7 @@ export class TomorrowProvider implements LightningProvider {
 
     const body = {
       location: `${center.lat},${center.lng}`,
-      fields: ['lightningFlashRate'],
+      fields: ['lightningFlashRateDensity'],
       units: 'metric',
       timesteps: ['1m'],
       startTime,
@@ -158,7 +158,7 @@ export class TomorrowProvider implements LightningProvider {
     let currentFlashRate = 0;
 
     intervals.forEach((interval, idx) => {
-      const rate = interval.values.lightningFlashRate ?? 0;
+      const rate = interval.values.lightningFlashRateDensity ?? 0;
       if (rate > maxFlashRate) maxFlashRate = rate;
 
       const intervalMs = new Date(interval.startTime).getTime();
