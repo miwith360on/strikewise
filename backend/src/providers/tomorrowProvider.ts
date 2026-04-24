@@ -129,7 +129,7 @@ export class TomorrowProvider implements LightningProvider {
     const endTime = now.toISOString();
 
     const body = {
-      location: { lat: center.lat, lon: center.lng },
+      location: `${center.lat},${center.lng}`,
       fields: ['lightningFlashRate'],
       units: 'metric',
       timesteps: ['1m'],
