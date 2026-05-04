@@ -89,13 +89,24 @@ function Toggle({
 export function AlertConfigPanel({ config, onSave }: AlertConfigPanelProps) {
   const [draft, setDraft] = useState<AlertConfig>(config);
   const [saved, setSaved] = useState(false);
+  const [validationError, setValidationError] = useState<string | null>(null);
 
   function update<K extends keyof AlertConfig>(key: K, value: AlertConfig[K]) {
     setDraft((prev) => ({ ...prev, [key]: value }));
     setSaved(false);
+    setValidationError(null);
   }
 
   function handleSave() {
+    if (draft.dangerRadiusKm >= draft.warningRadiusKm) {
+      setValidationError('Warning zone must be larger than Danger zone');
+      return;
+    }
+    if (draft.warningRadiusKm >= draft.cautionRadiusKm) {
+      setValidationError('Caution zone must be larger than Warning zone');
+      return;
+    }
+    setValidationError(null);
     onSave(draft);
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
@@ -180,6 +191,9 @@ export function AlertConfigPanel({ config, onSave }: AlertConfigPanelProps) {
         />
 
         {/* Save */}
+        {validationError && (
+          <p className="text-xs text-red-400 font-mono text-center">{validationError}</p>
+        )}
         <Button
           variant={saved ? 'ghost' : 'primary'}
           size="sm"

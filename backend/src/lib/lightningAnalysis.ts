@@ -14,15 +14,15 @@ const TREND_WINDOW_MS = 10 * 60 * 1000;
 const ALL_CLEAR_WINDOW_MS = 30 * 60 * 1000;
 const ACTIVE_WINDOW_MS = 10 * 60 * 1000;
 
-function isFiniteCoordinate(value: number) {
-  return Number.isFinite(value) && Math.abs(value) <= 180;
+function isFiniteCoordinate(value: number, maxAbs: number) {
+  return Number.isFinite(value) && Math.abs(value) <= maxAbs;
 }
 
 function isValidStrike(strike: LightningStrike) {
   return (
     strike.id.length > 0 &&
-    isFiniteCoordinate(strike.lat) &&
-    isFiniteCoordinate(strike.lng) &&
+    isFiniteCoordinate(strike.lat, 90) &&
+    isFiniteCoordinate(strike.lng, 180) &&
     Number.isFinite(strike.timestamp) &&
     strike.timestamp > 0 &&
     Number.isFinite(strike.intensityKa) &&

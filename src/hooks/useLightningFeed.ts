@@ -14,7 +14,7 @@ import {
   lightningService,
   lightningServiceMode,
 } from '@/services/lightning/lightningService';
-import { haversineKm } from '@/services/lightning/mockData';
+import { haversineKm } from '@/services/lightning/geo';
 import type { MapBounds } from '@/services/lightning/types';
 
 const QUERY_WINDOW_MINUTES = 30;

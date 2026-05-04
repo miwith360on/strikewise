@@ -1,5 +1,5 @@
 import type { LightningStrike, MonitoredLocation } from '@/services/lightning/types';
-import { haversineKm } from '@/services/lightning/mockData';
+import { haversineKm } from '@/services/lightning/geo';
 import { BoltIcon, ClockIcon, LocationIcon } from '@/components/ui/Icons';
 
 const SOUND_SPEED_KM_S = 0.343;

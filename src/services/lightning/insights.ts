@@ -6,7 +6,7 @@ import type {
   SafetyStatus,
   ThunderETAEntry,
 } from './types';
-import { haversineKm } from './mockData';
+import { haversineKm } from './geo';
 
 export const SOUND_SPEED_KM_S = 0.343;
 export const ACTIVE_WINDOW_MINUTES = 10;

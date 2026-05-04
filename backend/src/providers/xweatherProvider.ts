@@ -103,14 +103,15 @@ export class XWeatherProvider implements LightningProvider {
   }
 
   private _toStrike(obs: XWeatherObservation): LightningStrike {
-    const peakAmp = obs.ob.peakamp ?? 0;
+    const peakAmp = obs.ob.peakamp;
     return {
       id: obs.id ?? `xw-${obs.ob.timestamp}-${obs.loc.lat}-${obs.loc.long}`,
       lat: obs.loc.lat,
       lng: obs.loc.long,
       timestamp: obs.ob.timestamp * 1000, // seconds → ms
-      intensityKa: Math.abs(peakAmp),
-      polarity: peakAmp >= 0 ? 'positive' : 'negative',
+      intensityKa: Math.abs(peakAmp ?? 0),
+      // Negative peakamp = negative polarity; unknown defaults to negative (dominant CG polarity)
+      polarity: peakAmp === undefined ? 'negative' : peakAmp >= 0 ? 'positive' : 'negative',
       multiplicity: obs.ob.count ?? 1,
     };
   }

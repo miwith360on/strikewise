@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import type { MonitoredLocation } from '@/services/lightning/types';
 import { DEFAULT_LOCATION } from '@/services/lightning/lightningService';
 
@@ -25,7 +25,7 @@ export function useSelectedLocation(): UseLocationResult {
     });
   };
 
-  const requestGPS = () => {
+  const requestGPS = useCallback(() => {
     if (!navigator.geolocation) {
       setGpsError('Geolocation not supported by this browser');
       return;
@@ -48,13 +48,12 @@ export function useSelectedLocation(): UseLocationResult {
       },
       { enableHighAccuracy: true, timeout: 10000 },
     );
-  };
+  }, []);
 
   // Attempt GPS on mount (non-blocking — falls back to default)
   useEffect(() => {
     requestGPS();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [requestGPS]);
 
   return { location, gpsLoading, gpsError, requestGPS, setManualLocation };
 }

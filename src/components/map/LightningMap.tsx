@@ -19,9 +19,9 @@ import type {
   LightningStrike,
   MonitoredLocation,
 } from '@/services/lightning/types';
-import { haversineKm } from '@/services/lightning/mockData';
+import { haversineKm } from '@/services/lightning/geo';
 
-const ML_PREDICTION_URL = 'https://strikewise-production-fc9c.up.railway.app/ml/predict';
+const ML_PREDICTION_URL = import.meta.env.VITE_ML_URL ?? 'http://localhost:5000/ml/predict';
 const ML_POLL_INTERVAL_MS = 60_000;
 const PREDICTION_STROKE = '#b56cff';
 const CLUSTER_STROKE = '#ff9f43';

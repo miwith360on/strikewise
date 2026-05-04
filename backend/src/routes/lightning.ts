@@ -5,8 +5,25 @@ import { createLightningProvider } from '../providers/index.js';
 import type { BoundingBox, LightningQuery, LightningResponse } from '../types/lightning.js';
 
 const CACHE_TTL_MS = 10_000;
+const CACHE_MAX_ENTRIES = 500;
 const provider = createLightningProvider();
 const responseCache = new Map<string, { cachedAt: number; payload: LightningResponse }>();
+
+function pruneCache() {
+  const now = Date.now();
+  for (const [key, entry] of responseCache) {
+    if (now - entry.cachedAt > CACHE_TTL_MS * 6) {
+      responseCache.delete(key);
+    }
+  }
+  // Hard cap: evict oldest entries if still over limit
+  if (responseCache.size > CACHE_MAX_ENTRIES) {
+    const sorted = [...responseCache.entries()].sort((a, b) => a[1].cachedAt - b[1].cachedAt);
+    for (const [key] of sorted.slice(0, responseCache.size - CACHE_MAX_ENTRIES)) {
+      responseCache.delete(key);
+    }
+  }
+}
 
 const querySchema = z.object({
   north: z.coerce.number().optional(),
@@ -64,6 +81,7 @@ lightningRouter.get('/', async (request, response, next) => {
       try {
         payload = await provider.getRecentStrikes(normalizedQuery);
         responseCache.set(cacheKey, { cachedAt: Date.now(), payload });
+        pruneCache();
       } catch (providerError) {
         const msg = providerError instanceof Error ? providerError.message : 'Provider error';
         payload = {
