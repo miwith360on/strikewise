@@ -1,4 +1,5 @@
 import { env } from '../config/env.js';
+import { ProviderRegistry } from '../lib/providerRegistry.js';
 import type { LightningProvider } from '../types/lightning.js';
 import { BlitzortungProvider } from './blitzortungProvider.js';
 import { MockLightningProvider } from './mockLightningProvider.js';
@@ -7,35 +8,61 @@ import { OpenMeteoProvider } from './openMeteoProvider.js';
 import { TomorrowProvider } from './tomorrowProvider.js';
 import { XWeatherProvider } from './xweatherProvider.js';
 
-export function createLightningProvider(): LightningProvider {
+function buildProviderChain(): { name: string; provider: LightningProvider }[] {
   if (env.LIGHTNING_PROVIDER === 'auto') {
+    const chain: { name: string; provider: LightningProvider }[] = [];
+
+    // Best observed feed first if credentials exist
     if (env.XWEATHER_CLIENT_ID && env.XWEATHER_CLIENT_SECRET) {
-      return new XWeatherProvider();
+      chain.push({ name: 'xweather', provider: new XWeatherProvider() });
     }
 
-    // Prefer observed strikes from Blitzortung before modeled fallbacks.
-    return new BlitzortungProvider();
+    // Real-time community feed
+    chain.push({ name: 'blitzortung', provider: new BlitzortungProvider() });
+
+    // Modelled fallback (no API key required)
+    chain.push({ name: 'open-meteo', provider: new OpenMeteoProvider() });
+
+    return chain;
   }
 
   if (env.LIGHTNING_PROVIDER === 'tomorrow') {
-    return new TomorrowProvider();
-  }
-
-  if (env.LIGHTNING_PROVIDER === 'open-meteo') {
-    return new OpenMeteoProvider();
-  }
-
-  if (env.LIGHTNING_PROVIDER === 'blitzortung') {
-    return new BlitzortungProvider();
+    return [
+      { name: 'tomorrow', provider: new TomorrowProvider() },
+      { name: 'open-meteo', provider: new OpenMeteoProvider() },
+    ];
   }
 
   if (env.LIGHTNING_PROVIDER === 'xweather') {
-    return new XWeatherProvider();
+    return [
+      { name: 'xweather', provider: new XWeatherProvider() },
+      { name: 'blitzortung', provider: new BlitzortungProvider() },
+    ];
+  }
+
+  if (env.LIGHTNING_PROVIDER === 'blitzortung') {
+    return [
+      { name: 'blitzortung', provider: new BlitzortungProvider() },
+      { name: 'open-meteo', provider: new OpenMeteoProvider() },
+    ];
+  }
+
+  if (env.LIGHTNING_PROVIDER === 'open-meteo') {
+    return [{ name: 'open-meteo', provider: new OpenMeteoProvider() }];
   }
 
   if (env.LIGHTNING_PROVIDER === 'noaa-glm') {
-    return new NoaaGlmProvider();
+    return [{ name: 'noaa-glm', provider: new NoaaGlmProvider() }];
   }
 
-  return new MockLightningProvider();
+  // mock / default
+  return [{ name: 'mock', provider: new MockLightningProvider() }];
+}
+
+// Singleton registry shared across routes
+export const providerRegistry = new ProviderRegistry(buildProviderChain());
+
+/** Backwards-compatible shim used by lightning route */
+export function createLightningProvider(): LightningProvider {
+  return providerRegistry;
 }
