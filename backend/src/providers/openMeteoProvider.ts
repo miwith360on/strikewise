@@ -64,32 +64,42 @@ function pseudoRandom(seed: number): number {
   return x - Math.floor(x);
 }
 
+function parseUtcHour(hour: string): number {
+  // Open-Meteo hourly strings are usually timezone-naive (e.g. 2026-05-11T14:00).
+  // Interpret them as UTC unless an explicit timezone suffix is present.
+  const hasTzSuffix = /(?:[zZ]|[+-]\d{2}:\d{2})$/.test(hour);
+  const value = hasTzSuffix ? Date.parse(hour) : Date.parse(`${hour}Z`);
+  return Number.isFinite(value) ? value : NaN;
+}
+
 /** Build estimated strikes for a given hour potential (0–100). */
 function buildStrikes(
   potential: number,
   hourIndex: number,
-  hourEpochMs: number,
   center: { lat: number; lng: number },
   spread: { latSpread: number; lngSpread: number },
-  windowMinutes: number,
+  windowStartMs: number,
+  windowEndMs: number,
 ): LightningStrike[] {
-  if (potential < 5) return [];
+  const durationMs = Math.max(0, windowEndMs - windowStartMs);
+  if (potential < 5 || durationMs <= 0) return [];
 
-  const count = Math.round((potential / 100) * MAX_STRIKES_PER_HOUR);
+  const overlapRatio = Math.min(1, durationMs / (60 * 60 * 1000));
+  const count = Math.round((potential / 100) * MAX_STRIKES_PER_HOUR * overlapRatio);
   const strikes: LightningStrike[] = [];
 
   for (let i = 0; i < count; i++) {
     const seed = hourIndex * 1000 + i;
     const rLat = (pseudoRandom(seed) - 0.5) * 2 * spread.latSpread;
     const rLng = (pseudoRandom(seed + 0.5) - 0.5) * 2 * spread.lngSpread;
-    const rTime = pseudoRandom(seed + 1) * windowMinutes * 60 * 1000;
+    const rTime = pseudoRandom(seed + 1) * durationMs;
 
     const lat = center.lat + rLat;
     const lng = center.lng + rLng;
-    const timestamp = hourEpochMs + rTime;
+    const timestamp = windowStartMs + rTime;
 
     const id = createHash('sha1')
-      .update(`open-meteo:${hourEpochMs}:${i}`)
+      .update(`open-meteo:${windowStartMs}:${windowEndMs}:${i}`)
       .digest('hex')
       .slice(0, 16);
 
@@ -135,11 +145,15 @@ export class OpenMeteoProvider implements LightningProvider {
     let maxPotential = 0;
 
     for (let i = 0; i < time.length; i++) {
-      const hourEpochMs = new Date(time[i] + 'Z').getTime();
+      const hourEpochMs = parseUtcHour(time[i]);
+      if (!Number.isFinite(hourEpochMs)) continue;
       const nextHourMs = hourEpochMs + 60 * 60 * 1000;
 
       // Include this hour if it overlaps with the query window
       if (nextHourMs < cutoff || hourEpochMs > now) continue;
+
+      const windowStartMs = Math.max(hourEpochMs, cutoff);
+      const windowEndMs = Math.min(nextHourMs, now);
 
       const potential = lightning_potential[i] ?? 0;
       if (potential > maxPotential) maxPotential = potential;
@@ -147,16 +161,16 @@ export class OpenMeteoProvider implements LightningProvider {
       const hourStrikes = buildStrikes(
         potential,
         i,
-        hourEpochMs,
         center,
         spread,
-        Math.min(60, query.minutes),
+        windowStartMs,
+        windowEndMs,
       );
       strikes.push(...hourStrikes);
     }
 
     const currentHourIdx = time.findIndex((t) => {
-      const ms = new Date(t + 'Z').getTime();
+      const ms = parseUtcHour(t);
       return ms <= now && ms + 60 * 60 * 1000 > now;
     });
     const currentPotential =

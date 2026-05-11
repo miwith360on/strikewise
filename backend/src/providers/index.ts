@@ -8,6 +8,15 @@ import { TomorrowProvider } from './tomorrowProvider.js';
 import { XWeatherProvider } from './xweatherProvider.js';
 
 export function createLightningProvider(): LightningProvider {
+  if (env.LIGHTNING_PROVIDER === 'auto') {
+    if (env.XWEATHER_CLIENT_ID && env.XWEATHER_CLIENT_SECRET) {
+      return new XWeatherProvider();
+    }
+
+    // Prefer observed strikes from Blitzortung before modeled fallbacks.
+    return new BlitzortungProvider();
+  }
+
   if (env.LIGHTNING_PROVIDER === 'tomorrow') {
     return new TomorrowProvider();
   }

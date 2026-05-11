@@ -99,9 +99,10 @@ export class HttpLightningService implements ILightningService {
   ): () => void {
     const poll = async () => {
       try {
+        const seenBeforePoll = new Set(this._seenIds);
         const strikes = await this.getRecentStrikes(bounds, minutes);
         for (const strike of strikes) {
-          if (!this._seenIds.has(strike.id)) {
+          if (!seenBeforePoll.has(strike.id)) {
             this._seenIds.add(strike.id);
             onStrike(strike);
           }
