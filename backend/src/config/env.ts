@@ -7,7 +7,11 @@ const providerSchema = z.preprocess(
       return value;
     }
 
-    const normalized = value.trim().toLowerCase();
+    const normalized = value
+      .trim()
+      .replace(/^=+/, '')
+      .replace(/^['\"]|['\"]$/g, '')
+      .toLowerCase();
     return normalized.length > 0 ? normalized : undefined;
   },
   z.enum(['auto', 'mock', 'noaa-glm', 'xweather', 'blitzortung', 'open-meteo', 'tomorrow']).default('auto'),
