@@ -1,10 +1,22 @@
 import 'dotenv/config';
 import { z } from 'zod';
 
+const providerSchema = z.preprocess(
+  (value) => {
+    if (typeof value !== 'string') {
+      return value;
+    }
+
+    const normalized = value.trim().toLowerCase();
+    return normalized.length > 0 ? normalized : undefined;
+  },
+  z.enum(['auto', 'mock', 'noaa-glm', 'xweather', 'blitzortung', 'open-meteo', 'tomorrow']).default('auto'),
+);
+
 const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   PORT: z.coerce.number().default(3000),
-  LIGHTNING_PROVIDER: z.enum(['auto', 'mock', 'noaa-glm', 'xweather', 'blitzortung', 'open-meteo', 'tomorrow']).default('auto'),
+  LIGHTNING_PROVIDER: providerSchema,
   CORS_ORIGIN: z.string().default('*'),
   NOAA_GLM_BUCKET: z.string().default('noaa-goes18'),
   NOAA_GLM_BASE_URL: z.string().url().default('https://noaa-goes18.s3.amazonaws.com'),
@@ -15,4 +27,9 @@ const envSchema = z.object({
   TOMORROW_API_KEY: z.string().optional(),
 });
 
-export const env = envSchema.parse(process.env);
+const mergedEnv = {
+  ...process.env,
+  CORS_ORIGIN: process.env.CORS_ORIGIN ?? process.env.CORS_ORIGNS,
+};
+
+export const env = envSchema.parse(mergedEnv);
