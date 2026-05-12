@@ -93,13 +93,13 @@ export class XWeatherProvider implements LightningProvider {
     }
 
     // Default: search globally for recent flashes (last N minutes)
-    return `${BASE_URL}/lightning/search?query=type:CG&from=${from}&limit=100&${auth}`;
+    return `${BASE_URL}/lightning/search?query=type:CG&from=${from}&limit=500&${auth}`;
   }
 
   private _withinBounds(box: BoundingBox, from: string, auth: string): string {
     // xWeather accepts a bounding box as "swLat,swLng,neLat,neLng"
     const bbox = `${box.south},${box.west},${box.north},${box.east}`;
-    return `${BASE_URL}/lightning/within?p=${bbox}&from=${from}&limit=100&${auth}`;
+    return `${BASE_URL}/lightning/within?p=${bbox}&from=${from}&limit=500&${auth}`;
   }
 
   private _toStrike(obs: XWeatherObservation): LightningStrike {

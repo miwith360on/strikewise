@@ -29,6 +29,7 @@ const SERVERS = [
 ];
 
 const BUFFER_MINUTES = 60;
+const MAX_BUFFER_SIZE = 20_000;   // ~20k strikes before evicting oldest
 const RECONNECT_DELAY_MS = 5_000;
 const CONNECT_TIMEOUT_MS = 12_000;
 
@@ -119,6 +120,10 @@ class BlitzortungConnection {
         const strike = toStrike(msg);
         if (!strike) return;
         this.buffer.push(strike);
+        // Hard cap: evict oldest 10 % when buffer is full
+        if (this.buffer.length > MAX_BUFFER_SIZE) {
+          this.buffer.splice(0, Math.ceil(MAX_BUFFER_SIZE * 0.1));
+        }
       });
 
       this.ws.on('error', (err: Error) => {

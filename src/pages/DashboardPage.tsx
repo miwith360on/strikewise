@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useLightningFeed } from '@/hooks/useLightningFeed';
 import { useSelectedLocation } from '@/hooks/useSelectedLocation';
+import { useNwsAlerts } from '@/hooks/useNwsAlerts';
 import { LightningMap } from '@/components/map/LightningMap';
 import { MapStrikeInspector } from '@/components/map/MapStrikeInspector';
 import { ThunderETAPanel } from '@/components/panels/ThunderETAPanel';
@@ -10,6 +11,49 @@ import { StrikeStatsPanel } from '@/components/panels/StrikeStatsPanel';
 import { Header } from '@/components/layout/Header';
 import { BellIcon, ChevronDownIcon } from '@/components/ui/Icons';
 import type { LightningStrike } from '@/services/lightning/types';
+
+// ── NWS Alert Banner ─────────────────────────────────────────────
+function NwsAlertBanner({ headline, severity, event, onDismiss }: {
+  headline: string;
+  severity: string;
+  event: string;
+  onDismiss: () => void;
+}) {
+  const isTornado = event.toLowerCase().includes('tornado');
+  const isWarning = severity === 'Extreme' || severity === 'Severe' || event.toLowerCase().includes('warning');
+
+  return (
+    <div
+      role="alert"
+      className={`relative flex items-start gap-3 px-4 py-3 text-sm font-mono border-b ${
+        isTornado
+          ? 'bg-red-950/80 border-red-500 text-red-100'
+          : isWarning
+          ? 'bg-orange-950/80 border-orange-500 text-orange-100'
+          : 'bg-yellow-950/80 border-yellow-600 text-yellow-100'
+      }`}
+    >
+      <span className={`mt-0.5 w-2 h-2 rounded-full flex-shrink-0 animate-pulse ${
+        isTornado ? 'bg-red-400' : isWarning ? 'bg-orange-400' : 'bg-yellow-400'
+      }`} />
+      <div className="flex-1 min-w-0">
+        <span className={`uppercase tracking-widest text-[10px] font-bold mr-2 ${
+          isTornado ? 'text-red-400' : isWarning ? 'text-orange-400' : 'text-yellow-400'
+        }`}>
+          {event}
+        </span>
+        <span className="text-[11px] leading-snug">{headline}</span>
+      </div>
+      <button
+        onClick={onDismiss}
+        aria-label="Dismiss alert"
+        className="flex-shrink-0 text-storm-400 hover:text-storm-200 transition-colors text-base leading-none"
+      >
+        ×
+      </button>
+    </div>
+  );
+}
 
 // ── Collapsible section wrapper ───────────────────────────────────
 function CollapsibleSection({
@@ -62,6 +106,10 @@ export default function DashboardPage() {
 
   const { location, gpsLoading, requestGPS, setManualLocation } = useSelectedLocation();
   const [selectedStrikeId, setSelectedStrikeId] = useState<string | null>(null);
+  const [dismissedAlertIds, setDismissedAlertIds] = useState<Set<string>>(() => new Set());
+
+  const nwsAlerts = useNwsAlerts(location);
+  const visibleAlerts = nwsAlerts.alerts.filter((a) => !dismissedAlertIds.has(a.id));
 
   useEffect(() => {
     setMonitoredLocation(location);
@@ -90,6 +138,17 @@ export default function DashboardPage() {
         onRequestGPS={requestGPS}
         gpsLoading={gpsLoading}
       />
+
+      {/* NWS government alert banners */}
+      {visibleAlerts.map((alert) => (
+        <NwsAlertBanner
+          key={alert.id}
+          headline={alert.headline}
+          severity={alert.severity}
+          event={alert.event}
+          onDismiss={() => setDismissedAlertIds((prev) => new Set([...prev, alert.id]))}
+        />
+      ))}
 
       {/* Main layout: map + sidebar panels */}
       <div className="flex flex-col lg:flex-row flex-1 overflow-hidden">

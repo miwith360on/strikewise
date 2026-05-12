@@ -5,6 +5,7 @@ import cors from 'cors';
 import express from 'express';
 import { ZodError } from 'zod';
 import { env } from './config/env.js';
+import { alertsRouter } from './routes/alerts.js';
 import { healthRouter } from './routes/health.js';
 import { lightningRouter } from './routes/lightning.js';
 
@@ -19,6 +20,7 @@ app.use(express.json());
 
 app.use('/health', healthRouter);
 app.use('/api/lightning', lightningRouter);
+app.use('/api/alerts', alertsRouter);
 
 if (hasFrontendBuild) {
   app.use(express.static(frontendDistDir));

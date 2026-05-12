@@ -17,8 +17,29 @@ import type {
   ThunderETAEntry,
 } from './types';
 import { buildSafetyStatus, buildThunderETAs } from './insights';
+import { haversineKm } from './geo';
 
-const POLL_INTERVAL_MS = 10_000;
+const MIN_POLL_INTERVAL_MS = 5_000;   // < 15 km — storm is very close
+const MID_POLL_INTERVAL_MS = 7_000;   // 15–30 km — storm approaching
+const MAX_POLL_INTERVAL_MS = 10_000;  // > 30 km — normal rate
+
+function boundsCenter(bounds: MapBounds): LatLng {
+  return {
+    lat: (bounds.northEast.lat + bounds.southWest.lat) / 2,
+    lng: (bounds.northEast.lng + bounds.southWest.lng) / 2,
+  };
+}
+
+function adaptiveIntervalMs(strikes: LightningStrike[], bounds: MapBounds): number {
+  if (strikes.length === 0) return MAX_POLL_INTERVAL_MS;
+  const center = boundsCenter(bounds);
+  const closest = Math.min(
+    ...strikes.map((s) => haversineKm(center.lat, center.lng, s.lat, s.lng)),
+  );
+  if (closest < 15) return MIN_POLL_INTERVAL_MS;
+  if (closest < 30) return MID_POLL_INTERVAL_MS;
+  return MAX_POLL_INTERVAL_MS;
+}
 
 function isValidLatitude(value: number) {
   return Number.isFinite(value) && value >= -90 && value <= 90;
@@ -97,28 +118,35 @@ export class HttpLightningService implements ILightningService {
     minutes: number,
     onStrike: (strike: LightningStrike) => void,
   ): () => void {
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout>;
+
     const poll = async () => {
       try {
         const seenBeforePoll = new Set(this._seenIds);
         const strikes = await this.getRecentStrikes(bounds, minutes);
+        if (cancelled) return;
         for (const strike of strikes) {
           if (!seenBeforePoll.has(strike.id)) {
             this._seenIds.add(strike.id);
             onStrike(strike);
           }
         }
+        // Schedule next poll at an interval proportional to storm proximity
+        const nextMs = adaptiveIntervalMs(strikes, bounds);
+        timer = setTimeout(poll, nextMs);
       } catch {
-        // Network errors are non-fatal during polling; retry next interval
+        // Network errors are non-fatal; retry at normal rate
+        if (!cancelled) timer = setTimeout(poll, MAX_POLL_INTERVAL_MS);
       }
     };
 
-    // Kick off immediately (short delay to avoid startup race) then every interval
-    const timeout = setTimeout(poll, 500);
-    const interval = setInterval(poll, POLL_INTERVAL_MS);
+    // Kick off shortly after mount to avoid startup race
+    timer = setTimeout(poll, 500);
 
     return () => {
-      clearTimeout(timeout);
-      clearInterval(interval);
+      cancelled = true;
+      clearTimeout(timer);
     };
   }
 
