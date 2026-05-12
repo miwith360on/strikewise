@@ -100,6 +100,7 @@ export default function DashboardPage() {
     isLive,
     feedStatus,
     feedMessage,
+    feedMeta,
     setAlertConfig,
     setMonitoredLocation,
   } = useLightningFeed();
@@ -215,7 +216,7 @@ export default function DashboardPage() {
 
           {/* Strike feed */}
           <CollapsibleSection title="Strike Feed" defaultOpen={false}>
-            <StrikeStatsPanel strikes={strikes} isLive={isLive} feedStatus={feedStatus} />
+            <StrikeStatsPanel strikes={strikes} isLive={isLive} feedStatus={feedStatus} feedMeta={feedMeta} />
           </CollapsibleSection>
 
           {/* Alert config */}

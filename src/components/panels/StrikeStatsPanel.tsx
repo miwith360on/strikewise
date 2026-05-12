@@ -1,10 +1,11 @@
-import type { FeedStatus, LightningStrike } from '@/services/lightning/types';
+import type { FeedStatus, LightningFeedMeta, LightningStrike } from '@/services/lightning/types';
 import { BoltIcon } from '@/components/ui/Icons';
 
 interface StrikeStatsPanelProps {
   strikes: LightningStrike[];
   isLive: boolean;
   feedStatus: FeedStatus;
+  feedMeta?: LightningFeedMeta | null;
 }
 
 function timeAgo(ts: number): string {
@@ -30,7 +31,7 @@ function computeStrikeRate(strikes: LightningStrike[], windowMs = 5 * 60 * 1000)
   return { rate, trend, count: recent.length };
 }
 
-export function StrikeStatsPanel({ strikes, isLive, feedStatus }: StrikeStatsPanelProps) {
+export function StrikeStatsPanel({ strikes, isLive, feedStatus, feedMeta }: StrikeStatsPanelProps) {
   const sorted = [...strikes].sort((a, b) => b.timestamp - a.timestamp);
   const recent = sorted.slice(0, 5);
   const avgIntensity =
@@ -85,6 +86,34 @@ export function StrikeStatsPanel({ strikes, isLive, feedStatus }: StrikeStatsPan
           <p className="text-[10px] font-mono uppercase tracking-wider text-storm-500">Peak kA</p>
         </div>
       </div>
+
+      {/* Data source row */}
+      {feedMeta && (
+        <div className="flex items-center justify-between rounded-lg bg-storm-900/40 px-3 py-2 border border-storm-800">
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] font-mono uppercase tracking-wider text-storm-500">Source</span>
+            <span className={`text-[10px] font-mono font-semibold uppercase tracking-wider ${
+              feedMeta.providerStatus === 'degraded' ? 'text-strike-warning' : 'text-bolt-400'
+            }`}>
+              {feedMeta.provider}
+            </span>
+            {feedMeta.simulated && (
+              <span className="text-[9px] font-mono text-storm-600 border border-storm-700 rounded px-1">
+                modeled
+              </span>
+            )}
+          </div>
+          {feedMeta.dataQualityScore !== undefined && (
+            <span className={`text-[10px] font-mono tabular-nums ${
+              feedMeta.dataQualityScore >= 80 ? 'text-strike-safe' :
+              feedMeta.dataQualityScore >= 60 ? 'text-strike-warning' :
+              'text-strike-danger'
+            }`}>
+              {feedMeta.dataQualityScore}% quality
+            </span>
+          )}
+        </div>
+      )}
 
       {/* Strike feed */}
       <div className="space-y-1">

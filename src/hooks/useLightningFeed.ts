@@ -102,32 +102,38 @@ export function useLightningFeed(): LightningFeedState {
         setStrikes(initial);
         const latestMeta = lightningService.getLatestMeta();
         setFeedMeta(latestMeta);
+        const providerLabel = latestMeta?.provider
+          ? latestMeta.provider.charAt(0).toUpperCase() + latestMeta.provider.slice(1)
+          : null;
         if (lightningServiceMode === 'live') {
           setIsLive(true);
           setFeedStatus('live');
           if (latestMeta?.resultState === 'stale' && latestMeta.freshnessSeconds !== null) {
             setFeedMessage(`Feed delayed by ${Math.ceil((latestMeta.freshnessSeconds ?? 0) / 60)} min`);
           } else if (latestMeta?.resultState === 'empty') {
-            setFeedMessage(`No nearby strikes in the last ${QUERY_WINDOW_MINUTES} min`);
+            setFeedMessage(`${providerLabel ? `${providerLabel} · ` : ''}No nearby strikes in the last ${QUERY_WINDOW_MINUTES} min`);
           } else if (latestMeta?.cached) {
-            setFeedMessage(`Live lightning feed · cache ${latestMeta.cacheAgeSeconds ?? 0}s`);
+            setFeedMessage(`${providerLabel ? `${providerLabel} · ` : ''}cached ${latestMeta.cacheAgeSeconds ?? 0}s ago`);
           } else {
-            setFeedMessage('Live lightning feed');
+            setFeedMessage(providerLabel ? `${providerLabel} · Live feed` : 'Live lightning feed');
           }
         }
 
         unsub = lightningService.subscribeToLiveStrikes(bounds, QUERY_WINDOW_MINUTES, (strike) => {
           const currentMeta = lightningService.getLatestMeta();
           setFeedMeta(currentMeta);
+          const providerLabel = currentMeta?.provider
+            ? currentMeta.provider.charAt(0).toUpperCase() + currentMeta.provider.slice(1)
+            : null;
           if (lightningServiceMode === 'live') {
             setIsLive(true);
             setFeedStatus('live');
             if (currentMeta?.resultState === 'stale' && currentMeta.freshnessSeconds !== null) {
               setFeedMessage(`Feed delayed by ${Math.ceil((currentMeta.freshnessSeconds ?? 0) / 60)} min`);
             } else if (currentMeta?.cached) {
-              setFeedMessage(`Live lightning feed · cache ${currentMeta.cacheAgeSeconds ?? 0}s`);
+              setFeedMessage(`${providerLabel ? `${providerLabel} · ` : ''}cached ${currentMeta.cacheAgeSeconds ?? 0}s ago`);
             } else {
-              setFeedMessage('Live lightning feed');
+              setFeedMessage(providerLabel ? `${providerLabel} · Live feed` : 'Live lightning feed');
             }
           }
 
