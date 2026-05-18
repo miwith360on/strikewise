@@ -110,6 +110,23 @@ function applyLocationConfidenceOverride(
   };
 }
 
+function StrikeFlashOverlay({ trigger }: { trigger: string | null }) {
+  const [flashing, setFlashing] = useState(false);
+
+  useEffect(() => {
+    if (!trigger) return;
+    setFlashing(true);
+    const timer = setTimeout(() => setFlashing(false), 300);
+    return () => clearTimeout(timer);
+  }, [trigger]);
+
+  if (!flashing) return null;
+
+  return (
+    <div className="absolute inset-0 z-[2000] bg-yellow-100/40 animate-strike-flash pointer-events-none" />
+  );
+}
+
 function AreaRiskBanner({ status }: { status: SafetyStatus }) {
   if (status.level !== 'warning' && status.level !== 'danger') {
     return null;
@@ -326,6 +343,7 @@ export default function DashboardPage() {
       <div className="flex flex-col lg:flex-row flex-1 overflow-hidden">
         {/* ── Lightning Map (dominant panel) ─────────────────────── */}
         <div className="relative flex-shrink-0 h-[50vh] lg:h-full lg:flex-1">
+          <StrikeFlashOverlay trigger={newestStrikeId} />
           <AreaRiskBanner status={effectiveSafetyStatus} />
 
           <LightningMap
