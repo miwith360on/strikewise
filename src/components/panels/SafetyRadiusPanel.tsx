@@ -16,6 +16,13 @@ const levelMeta = {
   danger:  { ring: 'ring-strike-danger/50',  bar: 'bg-strike-danger',  fraction: 1 },
 };
 
+const levelTextColor = {
+  safe: 'text-strike-safe',
+  caution: 'text-strike-caution',
+  warning: 'text-strike-warning',
+  danger: 'text-strike-danger',
+} as const;
+
 function TrendArrow({ trend }: { trend: SafetyStatus['changeRate'] }) {
   if (trend === 'approaching') {
     return (
@@ -57,8 +64,7 @@ function RadiusBar({
         </div>
         <div className="h-1 bg-storm-700 rounded-full overflow-hidden">
           <div
-            className={`h-full rounded-full transition-all duration-500 ${filled ? color : 'w-0'}`}
-            style={{ width: filled ? '100%' : '0%' }}
+            className={`h-full rounded-full transition-all duration-500 ${filled ? `${color} w-full` : 'w-0'}`}
           />
         </div>
       </div>
@@ -111,8 +117,7 @@ export function SafetyRadiusPanel({ status, alertConfig, regionalAlertText = nul
         <div className="flex justify-between items-center border-t border-storm-700 pt-3">
           <span className="text-xs text-storm-400 font-mono uppercase tracking-wider">Closest strike</span>
           <span
-            className="text-xl font-display font-bold tabular-nums"
-            style={{ color: status.colorHex }}
+            className={`text-xl font-display font-bold tabular-nums ${levelTextColor[status.level]}`}
           >
             {status.closestStrikeKm >= 999 ? '—' : `${status.closestStrikeKm} km`}
           </span>

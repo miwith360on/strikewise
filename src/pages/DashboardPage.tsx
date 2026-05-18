@@ -220,6 +220,20 @@ export default function DashboardPage() {
   }, [location, setMonitoredLocation]);
 
   useEffect(() => {
+    // Location changes imply a different regional context, so clear dismissed alert state.
+    setDismissedAlertIds(new Set());
+  }, [location.id]);
+
+  useEffect(() => {
+    // Drop dismissed IDs that are no longer present in current alerts to avoid stale suppression.
+    const currentIds = new Set(nwsAlerts.alerts.map((alert) => alert.id));
+    setDismissedAlertIds((prev) => {
+      const next = new Set([...prev].filter((id) => currentIds.has(id)));
+      return next.size === prev.size ? prev : next;
+    });
+  }, [nwsAlerts.alerts]);
+
+  useEffect(() => {
     if (selectedStrikeId && !strikes.some((strike) => strike.id === selectedStrikeId)) {
       setSelectedStrikeId(null);
     }

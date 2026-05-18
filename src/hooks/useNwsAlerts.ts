@@ -60,7 +60,13 @@ export function useNwsAlerts(location: MonitoredLocation): NwsAlertsState {
         });
       } catch {
         if (!cancelledRef.current) {
-          setState((prev) => ({ ...prev, loading: false }));
+          setState({
+            active: false,
+            maxSeverity: null,
+            alerts: [],
+            loading: false,
+            outsideUs: false,
+          });
         }
       }
 
