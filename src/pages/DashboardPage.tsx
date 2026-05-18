@@ -88,6 +88,28 @@ function applyRegionalOverride(status: SafetyStatus, alerts: NwsAlert[]): Safety
   };
 }
 
+function applyLocationConfidenceOverride(
+  status: SafetyStatus,
+  monitoredLocationId: string,
+  gpsError: string | null,
+): SafetyStatus {
+  const usingFallbackDefaultLocation = monitoredLocationId === 'loc-dfw';
+  if (!gpsError || !usingFallbackDefaultLocation) {
+    return status;
+  }
+
+  if (SAFETY_LEVEL_RANK[status.level] >= SAFETY_LEVEL_RANK.caution) {
+    return status;
+  }
+
+  return {
+    ...status,
+    level: 'caution',
+    colorHex: levelColor('caution'),
+    recommendation: 'Location access failed, so safety is uncertain. Allow location or pin your position on the map.',
+  };
+}
+
 // ── NWS Alert Banner ─────────────────────────────────────────────
 function NwsAlertBanner({ headline, severity, event, onDismiss }: {
   headline: string;
@@ -208,8 +230,12 @@ export default function DashboardPage() {
     [selectedStrikeId, strikes],
   );
   const effectiveSafetyStatus = useMemo(
-    () => applyRegionalOverride(safetyStatus, nwsAlerts.alerts),
-    [safetyStatus, nwsAlerts.alerts],
+    () => applyLocationConfidenceOverride(
+      applyRegionalOverride(safetyStatus, nwsAlerts.alerts),
+      alertConfig.monitored.id,
+      gpsError,
+    ),
+    [safetyStatus, nwsAlerts.alerts, alertConfig.monitored.id, gpsError],
   );
 
   const providerName = formatProviderName(feedMeta?.provider);
