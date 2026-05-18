@@ -110,6 +110,40 @@ function applyLocationConfidenceOverride(
   };
 }
 
+function AreaRiskBanner({ status }: { status: SafetyStatus }) {
+  if (status.level !== 'warning' && status.level !== 'danger') {
+    return null;
+  }
+
+  const isDanger = status.level === 'danger';
+  const title = isDanger ? 'Take Cover Now' : 'Lightning In Your Area';
+  const subtitle = isDanger
+    ? 'Immediate threat nearby. Move indoors and away from windows.'
+    : 'Dangerous lightning activity is close. Go indoors now.';
+  const distanceLabel = status.closestStrikeKm >= 999 ? 'Unknown' : `${status.closestStrikeKm} km`;
+
+  return (
+    <div className="absolute top-16 left-1/2 z-[1200] w-[min(30rem,calc(100%-1.5rem))] -translate-x-1/2 pointer-events-none">
+      <div className={`rounded-xl border px-4 py-3 shadow-danger backdrop-blur-sm ${isDanger ? 'bg-red-950/90 border-red-400 text-red-100' : 'bg-orange-950/90 border-orange-400 text-orange-100'}`}>
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <div className="text-[11px] font-mono uppercase tracking-[0.18em] font-bold">
+              {title}
+            </div>
+            <div className="mt-1 text-sm font-display leading-tight">
+              {subtitle}
+            </div>
+          </div>
+          <div className="text-right">
+            <div className="text-[10px] font-mono uppercase tracking-widest opacity-80">closest</div>
+            <div className="text-lg font-display font-bold tabular-nums">{distanceLabel}</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── NWS Alert Banner ─────────────────────────────────────────────
 function NwsAlertBanner({ headline, severity, event, onDismiss }: {
   headline: string;
@@ -292,6 +326,8 @@ export default function DashboardPage() {
       <div className="flex flex-col lg:flex-row flex-1 overflow-hidden">
         {/* ── Lightning Map (dominant panel) ─────────────────────── */}
         <div className="relative flex-shrink-0 h-[50vh] lg:h-full lg:flex-1">
+          <AreaRiskBanner status={effectiveSafetyStatus} />
+
           <LightningMap
             strikes={strikes}
             monitored={alertConfig.monitored}
