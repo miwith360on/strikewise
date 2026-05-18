@@ -6,6 +6,7 @@ import { ShieldIcon } from '@/components/ui/Icons';
 interface SafetyRadiusPanelProps {
   status: SafetyStatus;
   alertConfig: AlertConfig;
+  regionalAlertText?: string | null;
 }
 
 const levelMeta = {
@@ -65,7 +66,7 @@ function RadiusBar({
   );
 }
 
-export function SafetyRadiusPanel({ status, alertConfig }: SafetyRadiusPanelProps) {
+export function SafetyRadiusPanel({ status, alertConfig, regionalAlertText = null }: SafetyRadiusPanelProps) {
   const meta = levelMeta[status.level];
 
   // Bars fill from outer in: caution, warning, danger
@@ -87,6 +88,11 @@ export function SafetyRadiusPanel({ status, alertConfig }: SafetyRadiusPanelProp
             <p className="text-xs text-storm-400 mt-2 leading-relaxed max-w-[16ch]">
               {status.recommendation}
             </p>
+            {regionalAlertText && (
+              <p className="text-[10px] text-strike-warning mt-2 leading-relaxed max-w-[24ch] font-mono uppercase tracking-wide">
+                Regional NWS alert active: {regionalAlertText}
+              </p>
+            )}
           </div>
 
           {/* Pulsing shield */}

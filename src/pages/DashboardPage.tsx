@@ -10,7 +10,8 @@ import { AlertConfigPanel } from '@/components/panels/AlertConfigPanel';
 import { StrikeStatsPanel } from '@/components/panels/StrikeStatsPanel';
 import { Header } from '@/components/layout/Header';
 import { BellIcon, ChevronDownIcon } from '@/components/ui/Icons';
-import type { LightningStrike } from '@/services/lightning/types';
+import type { LightningStrike, SafetyStatus } from '@/services/lightning/types';
+import type { NwsAlert } from '@/hooks/useNwsAlerts';
 
 function formatCoordinate(value: number, positiveLabel: string, negativeLabel: string) {
   const abs = Math.abs(value).toFixed(4);
@@ -22,6 +23,69 @@ function formatProviderName(provider?: string) {
     return 'unknown';
   }
   return provider.charAt(0).toUpperCase() + provider.slice(1);
+}
+
+const SAFETY_LEVEL_RANK: Record<SafetyStatus['level'], number> = {
+  safe: 0,
+  caution: 1,
+  warning: 2,
+  danger: 3,
+};
+
+function levelColor(level: SafetyStatus['level']) {
+  if (level === 'danger') return '#ff3333';
+  if (level === 'warning') return '#ff8800';
+  if (level === 'caution') return '#ffe033';
+  return '#00e676';
+}
+
+function minimumLevelFromNwsAlerts(alerts: NwsAlert[]): SafetyStatus['level'] {
+  let minimumLevel: SafetyStatus['level'] = 'safe';
+
+  for (const alert of alerts) {
+    const event = alert.event.toLowerCase();
+    const severity = alert.severity.toLowerCase();
+
+    if (event.includes('tornado warning')) {
+      return 'danger';
+    }
+
+    if (event.includes('severe thunderstorm warning') || event.includes('flash flood warning')) {
+      minimumLevel = SAFETY_LEVEL_RANK.warning > SAFETY_LEVEL_RANK[minimumLevel] ? 'warning' : minimumLevel;
+      continue;
+    }
+
+    if (
+      event.includes('severe thunderstorm watch') ||
+      event.includes('tornado watch') ||
+      severity === 'extreme' ||
+      severity === 'severe'
+    ) {
+      minimumLevel = SAFETY_LEVEL_RANK.caution > SAFETY_LEVEL_RANK[minimumLevel] ? 'caution' : minimumLevel;
+    }
+  }
+
+  return minimumLevel;
+}
+
+function applyRegionalOverride(status: SafetyStatus, alerts: NwsAlert[]): SafetyStatus {
+  const minLevel = minimumLevelFromNwsAlerts(alerts);
+  if (SAFETY_LEVEL_RANK[minLevel] <= SAFETY_LEVEL_RANK[status.level]) {
+    return status;
+  }
+
+  const recommendation = minLevel === 'danger'
+    ? 'Tornado warning in the region. Move to sturdy shelter immediately.'
+    : minLevel === 'warning'
+      ? 'Regional severe warning active. Treat conditions as dangerous and stay indoors.'
+      : 'Regional severe watch active. Keep shelter ready and avoid outdoor exposure.';
+
+  return {
+    ...status,
+    level: minLevel,
+    recommendation,
+    colorHex: levelColor(minLevel),
+  };
 }
 
 // ── NWS Alert Banner ─────────────────────────────────────────────
@@ -122,6 +186,12 @@ export default function DashboardPage() {
 
   const nwsAlerts = useNwsAlerts(location);
   const visibleAlerts = nwsAlerts.alerts.filter((a) => !dismissedAlertIds.has(a.id));
+  const regionalAlertText = nwsAlerts.active && nwsAlerts.alerts.length > 0
+    ? nwsAlerts.alerts
+      .slice(0, 2)
+      .map((alert) => alert.event)
+      .join(' · ')
+    : null;
 
   useEffect(() => {
     setMonitoredLocation(location);
@@ -137,6 +207,10 @@ export default function DashboardPage() {
     () => strikes.find((strike) => strike.id === selectedStrikeId) ?? null,
     [selectedStrikeId, strikes],
   );
+  const effectiveSafetyStatus = useMemo(
+    () => applyRegionalOverride(safetyStatus, nwsAlerts.alerts),
+    [safetyStatus, nwsAlerts.alerts],
+  );
 
   const providerName = formatProviderName(feedMeta?.provider);
   const closestStrikeLabel = feedMeta?.closestStrikeKm != null
@@ -149,8 +223,8 @@ export default function DashboardPage() {
       {/* Sticky header */}
       <Header
         location={alertConfig.monitored}
-        status={safetyStatus}
-        strikeCount={safetyStatus.strikeCountLast10min}
+        status={effectiveSafetyStatus}
+        strikeCount={effectiveSafetyStatus.strikeCountLast10min}
         feedStatus={feedStatus}
         feedMessage={feedMessage}
         onRequestGPS={requestGPS}
@@ -193,7 +267,7 @@ export default function DashboardPage() {
           {/* Map overlay: strike counter badge */}
           <div className="absolute top-3 right-3 z-[1000] glass-card border border-storm-600 px-3 py-1.5 rounded-xl flex items-center gap-2 shadow-card pointer-events-none">
             <span className="text-bolt-500 font-mono font-bold text-sm tabular-nums">
-              {safetyStatus.strikeCountLast10min}
+              {effectiveSafetyStatus.strikeCountLast10min}
             </span>
             <span className="text-[10px] font-mono uppercase tracking-widest text-storm-400">
               active / 10 min
@@ -250,7 +324,7 @@ export default function DashboardPage() {
 
           {/* Safety status */}
           <CollapsibleSection title="Safety Status" defaultOpen>
-            <SafetyRadiusPanel status={safetyStatus} alertConfig={alertConfig} />
+            <SafetyRadiusPanel status={effectiveSafetyStatus} alertConfig={alertConfig} regionalAlertText={regionalAlertText} />
           </CollapsibleSection>
 
           {/* Thunder ETA */}
