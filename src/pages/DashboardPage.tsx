@@ -12,6 +12,18 @@ import { Header } from '@/components/layout/Header';
 import { BellIcon, ChevronDownIcon } from '@/components/ui/Icons';
 import type { LightningStrike } from '@/services/lightning/types';
 
+function formatCoordinate(value: number, positiveLabel: string, negativeLabel: string) {
+  const abs = Math.abs(value).toFixed(4);
+  return `${abs}°${value >= 0 ? positiveLabel : negativeLabel}`;
+}
+
+function formatProviderName(provider?: string) {
+  if (!provider || provider.length === 0) {
+    return 'unknown';
+  }
+  return provider.charAt(0).toUpperCase() + provider.slice(1);
+}
+
 // ── NWS Alert Banner ─────────────────────────────────────────────
 function NwsAlertBanner({ headline, severity, event, onDismiss }: {
   headline: string;
@@ -104,7 +116,7 @@ export default function DashboardPage() {
     setMonitoredLocation,
   } = useLightningFeed();
 
-  const { location, gpsLoading, requestGPS, setManualLocation } = useSelectedLocation();
+  const { location, gpsLoading, gpsError, requestGPS, setManualLocation } = useSelectedLocation();
   const [selectedStrikeId, setSelectedStrikeId] = useState<string | null>(null);
   const [dismissedAlertIds, setDismissedAlertIds] = useState<Set<string>>(() => new Set());
 
@@ -126,6 +138,12 @@ export default function DashboardPage() {
     [selectedStrikeId, strikes],
   );
 
+  const providerName = formatProviderName(feedMeta?.provider);
+  const closestStrikeLabel = feedMeta?.closestStrikeKm != null
+    ? `${feedMeta.closestStrikeKm.toFixed(1)} km`
+    : 'none';
+  const resultStateLabel = feedMeta?.resultState ?? (strikes.length > 0 ? 'active' : 'empty');
+
   return (
     <div className="flex flex-col h-screen bg-storm-950 overflow-hidden">
       {/* Sticky header */}
@@ -138,6 +156,12 @@ export default function DashboardPage() {
         onRequestGPS={requestGPS}
         gpsLoading={gpsLoading}
       />
+
+      {gpsError && (
+        <div className="px-4 py-2 text-[11px] font-mono border-b border-strike-warning/40 bg-orange-950/50 text-orange-200">
+          Location access issue: {gpsError}. Monitoring {location.label}. Tap the location button or click the map to pin your area.
+        </div>
+      )}
 
       {/* NWS government alert banners */}
       {visibleAlerts.map((alert) => (
@@ -183,6 +207,27 @@ export default function DashboardPage() {
             <div className="mt-2 flex items-center gap-3 text-[10px] font-mono text-storm-400">
               <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-bolt-500" /> fresh strike</span>
               <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-[#992200]" /> aging strike</span>
+            </div>
+          </div>
+
+          <div className="absolute bottom-12 left-3 z-[1000] w-[min(24rem,calc(100%-1.5rem))] glass-card border border-storm-600 px-3 py-2 rounded-xl shadow-card pointer-events-none">
+            <div className="text-[10px] font-mono uppercase tracking-widest text-storm-400">
+              Feed Diagnostics
+            </div>
+            <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 text-[10px] font-mono">
+              <span className="text-storm-500">provider</span>
+              <span className="text-storm-200 justify-self-end">{providerName}</span>
+
+              <span className="text-storm-500">state</span>
+              <span className="text-storm-200 uppercase justify-self-end">{resultStateLabel}</span>
+
+              <span className="text-storm-500">closest strike</span>
+              <span className="text-bolt-400 justify-self-end">{closestStrikeLabel}</span>
+
+              <span className="text-storm-500">monitored</span>
+              <span className="text-storm-300 justify-self-end">
+                {formatCoordinate(alertConfig.monitored.lat, 'N', 'S')} {formatCoordinate(alertConfig.monitored.lng, 'E', 'W')}
+              </span>
             </div>
           </div>
 
