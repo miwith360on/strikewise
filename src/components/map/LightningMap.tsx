@@ -5,6 +5,7 @@ import {
   CircleMarker,
   MapContainer,
   Marker,
+  Pane,
   Polygon,
   Polyline,
   Popup,
@@ -220,12 +221,13 @@ function strikeVisuals(strike: LightningStrike, isNewest: boolean, monitored: Mo
   const ageSec = strikeAgeSeconds(strike);
   const dist = haversineKm(monitored.lat, monitored.lng, strike.lat, strike.lng);
 
-  // Radius: 4–10 px based on intensity
-  const radius = 4 + (strike.intensityKa / 120) * 6;
+  // Keep strike dots tight so the map remains visible: 6–10 px.
+  const intensityFactor = Math.min(Math.max(strike.intensityKa, 0), 120) / 120;
+  const radius = 6 + intensityFactor * 4;
 
   // Requested mapping: <=120s is fresh (yellow), >120s is aging (red).
   const color = ageSec <= 120 ? '#ffe033' : '#ff3333';
-  const opacity = isNewest ? 1 : 0.9;
+  const opacity = isNewest ? 0.85 : 0.8;
 
   return { radius, color, opacity, dist };
 }
@@ -335,26 +337,6 @@ export function LightningMap({
         );
       })}
 
-      {/* Monitored location marker */}
-      <CircleMarker
-        center={center}
-        radius={10}
-        pathOptions={{
-          color: '#00c8ff',
-          fillColor: '#00c8ff',
-          fillOpacity: 1,
-          weight: 3,
-          opacity: 1,
-        }}
-      >
-        <Popup>
-          <div className="font-display text-sm">
-            <div className="font-bold text-plasma-500">{monitored.label}</div>
-            <div className="text-storm-400 text-xs mt-0.5">Monitored location · tap map to move</div>
-          </div>
-        </Popup>
-      </CircleMarker>
-
       {/* Plasma glow ring around monitored location */}
       <Circle
         center={center}
@@ -368,52 +350,81 @@ export function LightningMap({
       />
 
       {/* Strike markers */}
-      {strikes.map((strike) => {
-        const { radius, color, opacity, dist } = strikeVisuals(strike, false, monitored);
-        const isNewest = strike.id === newestStrikeId;
-        const isSelected = strike.id === selectedStrikeId;
+      <Pane name="strike-points" style={{ zIndex: 430 }}>
+        {strikes.map((strike) => {
+          const { radius, color, opacity, dist } = strikeVisuals(strike, false, monitored);
+          const isNewest = strike.id === newestStrikeId;
+          const isSelected = strike.id === selectedStrikeId;
+          const renderedRadius = isSelected
+            ? Math.min(10, radius + 2)
+            : isNewest
+              ? Math.min(10, radius + 1)
+              : radius;
 
-        return (
-          <CircleMarker
-            key={strike.id}
-            center={[strike.lat, strike.lng]}
-            radius={isSelected ? radius * 1.9 : isNewest ? radius * 1.6 : radius}
-            pathOptions={{
-              color: isSelected ? '#ffffff' : color,
-              fillColor: color,
-              fillOpacity: isSelected ? 1 : isNewest ? 1 : opacity * 0.7,
-              weight: isSelected ? 3 : isNewest ? 2 : 1,
-              opacity: isSelected ? 1 : isNewest ? 1 : opacity,
-            }}
-            eventHandlers={{
-              click: (event) => {
-                event.originalEvent.stopPropagation();
-                onSelectStrike(strike);
-              },
-            }}
-          >
-            <Popup>
-              <div className="font-display text-xs space-y-1">
-                <div className="font-bold text-bolt-500">
-                  ⚡ {Math.round(strike.intensityKa)} kA
+          return (
+            <CircleMarker
+              key={strike.id}
+              center={[strike.lat, strike.lng]}
+              radius={renderedRadius}
+              pathOptions={{
+                color: isSelected ? '#ffffff' : color,
+                fillColor: color,
+                fillOpacity: 0.5,
+                weight: isSelected ? 2.5 : isNewest ? 2 : 1.5,
+                opacity,
+              }}
+              eventHandlers={{
+                click: (event) => {
+                  event.originalEvent.stopPropagation();
+                  onSelectStrike(strike);
+                },
+              }}
+            >
+              <Popup>
+                <div className="font-display text-xs space-y-1">
+                  <div className="font-bold text-bolt-500">
+                    ⚡ {Math.round(strike.intensityKa)} kA
+                  </div>
+                  <div className="text-storm-400">
+                    {Math.round(dist * 10) / 10} km away
+                  </div>
+                  <div className="text-storm-400">
+                    {strikeTypeLabel(strike.strikeType)}
+                  </div>
+                  <div className="text-storm-400">
+                    {strike.polarity === 'positive' ? '+ Positive' : '− Negative'} discharge
+                  </div>
+                  <div className="text-storm-400">
+                    {strikeAgeSeconds(strike)}s ago
+                  </div>
                 </div>
-                <div className="text-storm-400">
-                  {Math.round(dist * 10) / 10} km away
-                </div>
-                <div className="text-storm-400">
-                  {strikeTypeLabel(strike.strikeType)}
-                </div>
-                <div className="text-storm-400">
-                  {strike.polarity === 'positive' ? '+ Positive' : '− Negative'} discharge
-                </div>
-                <div className="text-storm-400">
-                  {strikeAgeSeconds(strike)}s ago
-                </div>
-              </div>
-            </Popup>
-          </CircleMarker>
-        );
-      })}
+              </Popup>
+            </CircleMarker>
+          );
+        })}
+      </Pane>
+
+      {/* Keep monitored point crisp and above strike dots. */}
+      <Pane name="monitored-point" style={{ zIndex: 700 }}>
+        <CircleMarker
+          center={center}
+          radius={10}
+          pathOptions={{
+            color: '#00c8ff',
+            fillColor: '#00c8ff',
+            fillOpacity: 1,
+            weight: 3,
+            opacity: 1,
+          }}
+        >
+          <Popup>
+            <div className="font-display text-sm">
+              <div className="font-bold text-plasma-500">{monitored.label}</div>
+              <div className="text-storm-400 text-xs mt-0.5">Monitored location · tap map to move</div>
+            </div>
+          </Popup>
+        </CircleMarker>
+      </Pane>
 
       {/* Flash effect on newest strike */}
       {newestStrikeId &&
