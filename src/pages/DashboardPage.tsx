@@ -110,23 +110,6 @@ function applyLocationConfidenceOverride(
   };
 }
 
-function StrikeFlashOverlay({ trigger }: { trigger: string | null }) {
-  const [flashing, setFlashing] = useState(false);
-
-  useEffect(() => {
-    if (!trigger) return;
-    setFlashing(true);
-    const timer = setTimeout(() => setFlashing(false), 300);
-    return () => clearTimeout(timer);
-  }, [trigger]);
-
-  if (!flashing) return null;
-
-  return (
-    <div className="absolute inset-0 z-[2000] bg-yellow-100/40 animate-strike-flash pointer-events-none" />
-  );
-}
-
 function AreaRiskBanner({ status }: { status: SafetyStatus }) {
   if (status.level !== 'warning' && status.level !== 'danger') {
     return null;
@@ -141,7 +124,7 @@ function AreaRiskBanner({ status }: { status: SafetyStatus }) {
 
   return (
     <div className="absolute top-16 left-1/2 z-[1200] w-[min(30rem,calc(100%-1.5rem))] -translate-x-1/2 pointer-events-none">
-      <div className={`rounded-xl border px-4 py-3 shadow-danger backdrop-blur-sm ${isDanger ? 'bg-red-950/90 border-red-400 text-red-100' : 'bg-orange-950/90 border-orange-400 text-orange-100'}`}>
+      <div className={`rounded-xl border px-4 py-3 shadow-danger backdrop-blur-sm ${isDanger ? 'bg-red-950/90 border-red-400 text-red-100' : 'bg-yellow-300/95 border-yellow-100 text-zinc-950'}`}>
         <div className="flex items-center justify-between gap-3">
           <div>
             <div className="text-[11px] font-mono uppercase tracking-[0.18em] font-bold">
@@ -152,7 +135,7 @@ function AreaRiskBanner({ status }: { status: SafetyStatus }) {
             </div>
           </div>
           <div className="text-right">
-            <div className="text-[10px] font-mono uppercase tracking-widest opacity-80">closest</div>
+            <div className={`text-[10px] font-mono uppercase tracking-widest ${isDanger ? 'opacity-80' : 'text-zinc-700'}`}>closest</div>
             <div className="text-lg font-display font-bold tabular-nums">{distanceLabel}</div>
           </div>
         </div>
@@ -340,10 +323,9 @@ export default function DashboardPage() {
       ))}
 
       {/* Main layout: map + sidebar panels */}
-      <div className="flex flex-col lg:flex-row flex-1 overflow-hidden">
+      <div className="flex flex-col lg:flex-row flex-1 overflow-hidden bg-storm-950">
         {/* ── Lightning Map (dominant panel) ─────────────────────── */}
-        <div className="relative flex-shrink-0 h-[50vh] lg:h-full lg:flex-1">
-          <StrikeFlashOverlay trigger={newestStrikeId} />
+        <div className="relative flex-shrink-0 h-[50vh] lg:h-full lg:flex-1 bg-storm-950">
           <AreaRiskBanner status={effectiveSafetyStatus} />
 
           <LightningMap
@@ -374,7 +356,7 @@ export default function DashboardPage() {
             </div>
             <div className="mt-2 flex items-center gap-3 text-[10px] font-mono text-storm-400">
               <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-bolt-500" /> fresh strike</span>
-              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-[#992200]" /> aging strike</span>
+              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-[#ff3333]" /> aging strike</span>
             </div>
           </div>
 
