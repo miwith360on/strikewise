@@ -10,6 +10,7 @@
 // ─────────────────────────────────────────────────────────────────
 
 import { env } from '../config/env.js';
+import { getBoundsCenter, haversineKm } from '../lib/geo.js';
 import type {
   BoundingBox,
   LightningProvider,
@@ -22,9 +23,14 @@ interface XWeatherObservation {
   id: string;
   loc: { lat: number; long: number };
   ob: {
-    timestamp: number;         // Unix seconds
-    peakamp?: number;          // Peak current in kA (signed: negative = negative polarity)
-    type?: string;             // "CG" | "IC" | etc.
+    age?: number;              // Strike age in seconds
+    pulse?: {
+      type?: string;           // "cg" | "ic"
+      peakamp?: number;        // Signed peak current in kA
+    };
+    timestamp?: number;        // Optional Unix seconds fallback
+    peakamp?: number;          // Legacy fallback
+    type?: string;             // Legacy fallback
     count?: number;            // Flash multiplicity
   };
 }
@@ -35,7 +41,9 @@ interface XWeatherResponse {
   response?: XWeatherObservation[];
 }
 
-const BASE_URL = 'https://api.xweather.com';
+const BASE_URL = 'https://api.aerisapi.com';
+const ACTIVE_STRIKE_MAX_AGE_SECONDS = 600;
+const FRESH_STRIKE_MAX_AGE_SECONDS = 120;
 
 export class XWeatherProvider implements LightningProvider {
   async getRecentStrikes(query: LightningQuery): Promise<LightningResponse> {
@@ -59,10 +67,12 @@ export class XWeatherProvider implements LightningProvider {
       throw new Error(`xWeather API error: ${msg}`);
     }
 
-    const observations = (data.response ?? []).filter((obs) => obs.ob.type === undefined || obs.ob.type === 'CG');
+    const observations = data.response ?? [];
     const strikes: LightningStrike[] = observations.map((obs) =>
       this._toStrike(obs),
     );
+    const activeStrikeCount = observations.filter((strike) => (strike.ob.age ?? Number.MAX_SAFE_INTEGER) <= ACTIVE_STRIKE_MAX_AGE_SECONDS).length;
+    const freshStrikeCount = observations.filter((strike) => (strike.ob.age ?? Number.MAX_SAFE_INTEGER) <= FRESH_STRIKE_MAX_AGE_SECONDS).length;
 
     return {
       provider: 'xweather',
@@ -72,7 +82,12 @@ export class XWeatherProvider implements LightningProvider {
         simulated: false,
         source: 'xweather-lightning-api',
         providerStatus: 'ok',
-        notes: [`${strikes.length} strikes from xWeather observations`],
+        resultState: observations.length === 0 ? 'empty' : 'active',
+        strikeCountLast10min: activeStrikeCount,
+        notes: [
+          `${strikes.length} strikes parsed from xWeather lightning/closest response array`,
+          `${freshStrikeCount} strikes are fresh (ob.age <= 120s), ${Math.max(0, strikes.length - freshStrikeCount)} are aging`,
+        ],
       },
     };
   }
@@ -85,34 +100,44 @@ export class XWeatherProvider implements LightningProvider {
     secret: string,
   ): string {
     const auth = `client_id=${encodeURIComponent(id)}&client_secret=${encodeURIComponent(secret)}`;
-    const minutes = query.minutes ?? 10;
-    const from = `-${minutes}minutes`;
-
     if (query.bounds) {
-      return this._withinBounds(query.bounds, from, auth);
+      return this._closestInBounds(query.bounds, auth);
     }
 
-    // Default: search globally for recent flashes (last N minutes)
-    return `${BASE_URL}/lightning/search?query=type:CG&from=${from}&limit=500&${auth}`;
+    return `${BASE_URL}/lightning/closest?p=39.8283,-98.5795&radius=500mi&limit=500&${auth}`;
   }
 
-  private _withinBounds(box: BoundingBox, from: string, auth: string): string {
-    // xWeather accepts a bounding box as "swLat,swLng,neLat,neLng"
-    const bbox = `${box.south},${box.west},${box.north},${box.east}`;
-    return `${BASE_URL}/lightning/within?p=${bbox}&from=${from}&limit=500&${auth}`;
+  private _closestInBounds(box: BoundingBox, auth: string): string {
+    const center = getBoundsCenter(box);
+    const cornerRadiusKm = haversineKm(center.lat, center.lng, box.north, box.east);
+    const radiusKm = Math.max(1, Math.ceil(cornerRadiusKm));
+    return `${BASE_URL}/lightning/closest?p=${center.lat},${center.lng}&radius=${radiusKm}km&limit=500&${auth}`;
   }
 
   private _toStrike(obs: XWeatherObservation): LightningStrike {
-    const peakAmp = obs.ob.peakamp;
+    const rawPeakAmp = obs.ob.pulse?.peakamp ?? obs.ob.peakamp;
+    const peakAmp = rawPeakAmp ?? 0;
+    const fallbackAgeSeconds = obs.ob.timestamp !== undefined
+      ? Math.max(0, Math.round(Date.now() / 1000) - obs.ob.timestamp)
+      : 0;
+    const strikeAgeSeconds = Math.max(0, obs.ob.age ?? fallbackAgeSeconds);
+    const strikeTypeRaw = (obs.ob.pulse?.type ?? obs.ob.type ?? '').toLowerCase();
+    const strikeType = strikeTypeRaw === 'cg' || strikeTypeRaw === 'ic' ? strikeTypeRaw : 'unknown';
+    const timestampMs = obs.ob.age !== undefined
+      ? Date.now() - strikeAgeSeconds * 1000
+      : (obs.ob.timestamp ?? Math.floor(Date.now() / 1000)) * 1000;
+
     return {
-      id: obs.id ?? `xw-${obs.ob.timestamp}-${obs.loc.lat}-${obs.loc.long}`,
+      id: obs.id ?? `xw-${timestampMs}-${obs.loc.lat}-${obs.loc.long}`,
       lat: obs.loc.lat,
       lng: obs.loc.long,
-      timestamp: obs.ob.timestamp * 1000, // seconds → ms
+      timestamp: timestampMs,
       intensityKa: Math.abs(peakAmp ?? 0),
-      // Negative peakamp = negative polarity; unknown defaults to negative (dominant CG polarity)
-      polarity: peakAmp === undefined ? 'negative' : peakAmp >= 0 ? 'positive' : 'negative',
+      polarity: rawPeakAmp === undefined ? 'negative' : rawPeakAmp >= 0 ? 'positive' : 'negative',
       multiplicity: obs.ob.count ?? 1,
+      ageSeconds: strikeAgeSeconds,
+      strikeType,
+      peakAmpKa: peakAmp,
     };
   }
 }

@@ -21,6 +21,12 @@ export interface LightningStrike {
   polarity: 'negative' | 'positive';
   /** Flash multiplicity — number of return strokes */
   multiplicity: number;
+  /** Source-reported age in seconds when available (xWeather: ob.age). */
+  ageSeconds?: number;
+  /** Source strike type (xWeather: ob.pulse.type). */
+  strikeType?: 'cg' | 'ic' | 'unknown';
+  /** Signed peak current from source payload (xWeather: ob.pulse.peakamp). */
+  peakAmpKa?: number;
 }
 
 /** Geographic bounding box for map queries */

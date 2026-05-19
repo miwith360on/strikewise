@@ -156,7 +156,30 @@ export class HttpLightningService implements ILightningService {
     config: AlertConfig,
     feedMeta?: LightningFeedMeta | null,
   ): SafetyStatus {
-    return buildSafetyStatus(location, strikes, config, feedMeta);
+    const baseStatus = buildSafetyStatus(location, strikes, config, feedMeta);
+
+    if (strikes.length === 0) {
+      return {
+        ...baseStatus,
+        level: 'safe',
+        recommendation: 'No nearby strikes detected. Conditions look clear for now.',
+      };
+    }
+
+    const hasStrikeWithinRadius = strikes.some((strike) =>
+      haversineKm(location.lat, location.lng, strike.lat, strike.lng) <= config.cautionRadiusKm,
+    );
+
+    if (hasStrikeWithinRadius && baseStatus.level === 'caution') {
+      return {
+        ...baseStatus,
+        level: 'warning',
+        colorHex: '#ff8800',
+        recommendation: 'Lightning detected within your monitored radius. Move indoors now.',
+      };
+    }
+
+    return baseStatus;
   }
 
   getThunderETAs(location: LatLng, strikes: LightningStrike[]): ThunderETAEntry[] {

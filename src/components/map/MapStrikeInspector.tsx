@@ -4,6 +4,26 @@ import { BoltIcon, ClockIcon, LocationIcon } from '@/components/ui/Icons';
 
 const SOUND_SPEED_KM_S = 0.343;
 
+function strikeTypeLabel(strikeType?: LightningStrike['strikeType']) {
+  if (strikeType === 'cg') return 'Cloud-to-Ground';
+  if (strikeType === 'ic') return 'In-Cloud';
+  return 'Unknown';
+}
+
+function strikeAgeSeconds(strike: LightningStrike) {
+  if (typeof strike.ageSeconds === 'number' && Number.isFinite(strike.ageSeconds)) {
+    return Math.max(0, Math.round(strike.ageSeconds));
+  }
+  return Math.max(0, Math.round((Date.now() - strike.timestamp) / 1000));
+}
+
+function signedPeakAmp(strike: LightningStrike) {
+  if (typeof strike.peakAmpKa === 'number' && Number.isFinite(strike.peakAmpKa)) {
+    return strike.peakAmpKa;
+  }
+  return strike.polarity === 'positive' ? strike.intensityKa : -strike.intensityKa;
+}
+
 function formatAge(timestamp: number) {
   const ageSec = Math.max(0, Math.round((Date.now() - timestamp) / 1000));
   if (ageSec < 60) return `${ageSec}s ago`;
@@ -41,6 +61,8 @@ export function MapStrikeInspector({ strike, monitored, onClose }: MapStrikeInsp
   }
 
   const distanceKm = haversineKm(monitored.lat, monitored.lng, strike.lat, strike.lng);
+  const signedAmp = signedPeakAmp(strike);
+  const ampLabel = `${signedAmp >= 0 ? '+' : ''}${Math.round(signedAmp)} kA`;
 
   return (
     <div className="glass-card border border-bolt-500/20 shadow-bolt px-4 py-3 rounded-2xl w-full max-w-sm">
@@ -51,7 +73,7 @@ export function MapStrikeInspector({ strike, monitored, onClose }: MapStrikeInsp
             <span className="text-xs font-mono uppercase tracking-widest">Selected Strike</span>
           </div>
           <p className="mt-2 text-2xl font-display font-bold text-storm-50">
-            {Math.round(strike.intensityKa)} kA
+            {ampLabel}
           </p>
         </div>
         <button
@@ -77,15 +99,15 @@ export function MapStrikeInspector({ strike, monitored, onClose }: MapStrikeInsp
           <div className="mt-1 text-storm-100 text-sm capitalize">{strike.polarity}</div>
         </div>
         <div className="rounded-xl bg-storm-800/70 px-3 py-2">
-          <div className="text-storm-500 uppercase tracking-widest">Multiplicity</div>
-          <div className="mt-1 text-storm-100 text-sm">{strike.multiplicity} strokes</div>
+          <div className="text-storm-500 uppercase tracking-widest">Type</div>
+          <div className="mt-1 text-storm-100 text-sm">{strikeTypeLabel(strike.strikeType)}</div>
         </div>
       </div>
 
       <div className="mt-4 space-y-2 text-xs font-mono text-storm-300">
         <div className="flex items-center gap-2">
           <ClockIcon className="w-3.5 h-3.5 text-storm-500" />
-          <span>{formatAge(strike.timestamp)}</span>
+          <span>{formatAge(Date.now() - strikeAgeSeconds(strike) * 1000)}</span>
         </div>
         <div className="flex items-center gap-2">
           <LocationIcon className="w-3.5 h-3.5 text-plasma-500" />

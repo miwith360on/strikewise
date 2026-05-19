@@ -11,6 +11,9 @@ export interface LightningStrike {
   intensityKa: number;
   polarity: 'negative' | 'positive';
   multiplicity: number;
+  ageSeconds?: number;
+  strikeType?: 'cg' | 'ic' | 'unknown';
+  peakAmpKa?: number;
 }
 
 export interface BoundingBox {

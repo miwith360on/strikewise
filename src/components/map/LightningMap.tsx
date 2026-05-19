@@ -202,23 +202,30 @@ function MapClickCapture({ onMoveMonitoredLocation }: { onMoveMonitoredLocation:
   return null;
 }
 
+function strikeAgeSeconds(strike: LightningStrike): number {
+  if (typeof strike.ageSeconds === 'number' && Number.isFinite(strike.ageSeconds)) {
+    return Math.max(0, Math.round(strike.ageSeconds));
+  }
+  return Math.max(0, Math.round((Date.now() - strike.timestamp) / 1000));
+}
+
+function strikeTypeLabel(strikeType?: LightningStrike['strikeType']) {
+  if (strikeType === 'cg') return 'Cloud-to-Ground';
+  if (strikeType === 'ic') return 'In-Cloud';
+  return 'Unknown';
+}
+
 // ── Strike age → visual properties ───────────────────────────────
 function strikeVisuals(strike: LightningStrike, isNewest: boolean, monitored: MonitoredLocation) {
-  const ageMs = Date.now() - strike.timestamp;
-  const ageFraction = Math.min(ageMs / (10 * 60 * 1000), 1); // 0 = fresh, 1 = 10 min old
+  const ageSec = strikeAgeSeconds(strike);
   const dist = haversineKm(monitored.lat, monitored.lng, strike.lat, strike.lng);
 
   // Radius: 4–10 px based on intensity
   const radius = 4 + (strike.intensityKa / 120) * 6;
 
-  // Color: yellow → orange → dim red as strike ages
-  let color: string;
-  if (ageFraction < 0.15) color = isNewest ? '#ffffff' : '#ffe033';
-  else if (ageFraction < 0.4) color = '#ffb300';
-  else if (ageFraction < 0.7) color = '#ff6600';
-  else color = '#992200';
-
-  const opacity = 0.9 - ageFraction * 0.5;
+  // Requested mapping: <=120s is fresh (yellow), >120s is aging (red).
+  const color = ageSec <= 120 ? '#ffe033' : '#ff3333';
+  const opacity = isNewest ? 1 : 0.9;
 
   return { radius, color, opacity, dist };
 }
@@ -394,10 +401,13 @@ export function LightningMap({
                   {Math.round(dist * 10) / 10} km away
                 </div>
                 <div className="text-storm-400">
+                  {strikeTypeLabel(strike.strikeType)}
+                </div>
+                <div className="text-storm-400">
                   {strike.polarity === 'positive' ? '+ Positive' : '− Negative'} discharge
                 </div>
                 <div className="text-storm-400">
-                  {Math.round((Date.now() - strike.timestamp) / 1000)}s ago
+                  {strikeAgeSeconds(strike)}s ago
                 </div>
               </div>
             </Popup>
