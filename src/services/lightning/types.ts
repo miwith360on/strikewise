@@ -27,6 +27,8 @@ export interface LightningStrike {
   strikeType?: 'cg' | 'ic' | 'unknown';
   /** Signed peak current from source payload (xWeather: ob.pulse.peakamp). */
   peakAmpKa?: number;
+  /** Source location precision radius in kilometers when available. */
+  errorRadiusKm?: number;
 }
 
 /** Geographic bounding box for map queries */

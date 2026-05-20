@@ -4,7 +4,7 @@ import { enrichLightningResponse } from '../lib/lightningAnalysis.js';
 import { createLightningProvider } from '../providers/index.js';
 import type { BoundingBox, LightningQuery, LightningResponse } from '../types/lightning.js';
 
-const CACHE_TTL_MS = 10_000;
+const CACHE_TTL_MS = 4_000;
 const CACHE_MAX_ENTRIES = 500;
 const provider = createLightningProvider();
 const responseCache = new Map<string, { cachedAt: number; payload: LightningResponse }>();

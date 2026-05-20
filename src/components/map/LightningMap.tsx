@@ -12,6 +12,7 @@ import {
   TileLayer,
   Tooltip,
   useMap,
+  WMSTileLayer,
   useMapEvents,
 } from 'react-leaflet';
 import type {
@@ -26,6 +27,8 @@ const ML_PREDICTION_URL = import.meta.env.VITE_ML_URL ?? 'http://localhost:5000/
 const ML_POLL_INTERVAL_MS = 60_000;
 const PREDICTION_STROKE = '#b56cff';
 const CLUSTER_STROKE = '#ff9f43';
+const NEXRAD_WMS_URL = 'https://opengeo.ncep.noaa.gov/geoserver/conus/conus_bref_qcd/ows';
+const NEXRAD_WMS_LAYER = 'conus_bref_qcd';
 const predictionLabelIcon = divIcon({
   className: 'storm-prediction-label',
   html: '<div></div>',
@@ -308,6 +311,20 @@ export function LightningMap({
         url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
       />
 
+      {/* Live NEXRAD radar WMS overlay above base map and below strike layers */}
+      <Pane name="radar-overlay" style={{ zIndex: 320 }}>
+        <WMSTileLayer
+          url={NEXRAD_WMS_URL}
+          layers={NEXRAD_WMS_LAYER}
+          format="image/png"
+          transparent
+          opacity={0.35}
+          version="1.3.0"
+          pane="radar-overlay"
+          attribution='NOAA/NWS NEXRAD'
+        />
+      </Pane>
+
       <MapCenterEffect center={center} />
       <MapClickCapture onMoveMonitoredLocation={onMoveMonitoredLocation} />
 
@@ -348,6 +365,27 @@ export function LightningMap({
           weight: 0,
         }}
       />
+
+      {/* Per-strike source uncertainty ring (>1 km error radius only) */}
+      <Pane name="strike-errors" style={{ zIndex: 420 }}>
+        {strikes
+          .filter((strike) => typeof strike.errorRadiusKm === 'number' && strike.errorRadiusKm > 1)
+          .map((strike) => (
+            <Circle
+              key={`${strike.id}-error`}
+              center={[strike.lat, strike.lng]}
+              radius={(strike.errorRadiusKm as number) * 1000}
+              pathOptions={{
+                color: '#b7d8ff',
+                fillColor: '#b7d8ff',
+                fillOpacity: 0.07,
+                opacity: 0.35,
+                weight: 1,
+                dashArray: '5, 5',
+              }}
+            />
+          ))}
+      </Pane>
 
       {/* Strike markers */}
       <Pane name="strike-points" style={{ zIndex: 430 }}>
@@ -397,6 +435,11 @@ export function LightningMap({
                   <div className="text-storm-400">
                     {strikeAgeSeconds(strike)}s ago
                   </div>
+                  {typeof strike.errorRadiusKm === 'number' && strike.errorRadiusKm > 0 && (
+                    <div className="text-storm-400">
+                      ±{strike.errorRadiusKm.toFixed(1)} km location error radius
+                    </div>
+                  )}
                 </div>
               </Popup>
             </CircleMarker>

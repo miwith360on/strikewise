@@ -27,11 +27,13 @@ interface XWeatherObservation {
     pulse?: {
       type?: string;           // "cg" | "ic"
       peakamp?: number;        // Signed peak current in kA
+      [key: string]: unknown;
     };
     timestamp?: number;        // Optional Unix seconds fallback
     peakamp?: number;          // Legacy fallback
     type?: string;             // Legacy fallback
     count?: number;            // Flash multiplicity
+    [key: string]: unknown;
   };
 }
 
@@ -44,6 +46,52 @@ interface XWeatherResponse {
 const BASE_URL = 'https://api.aerisapi.com';
 const ACTIVE_STRIKE_MAX_AGE_SECONDS = 600;
 const FRESH_STRIKE_MAX_AGE_SECONDS = 120;
+const KM_PER_MILE = 1.60934;
+
+function getNumber(record: Record<string, unknown>, keys: string[]): number | null {
+  for (const key of keys) {
+    const candidate = record[key];
+    if (typeof candidate === 'number' && Number.isFinite(candidate) && candidate > 0) {
+      return candidate;
+    }
+  }
+
+  return null;
+}
+
+function extractErrorRadiusKm(ob: XWeatherObservation['ob']): number | undefined {
+  const obRecord = ob as Record<string, unknown>;
+
+  const kmDirect = getNumber(obRecord, [
+    'errorRadiusKm',
+    'error_radius_km',
+    'locErrorKm',
+    'locerrkm',
+    'errorkm',
+    'errkm',
+  ]);
+  if (kmDirect !== null) {
+    return kmDirect;
+  }
+
+  const meters = getNumber(obRecord, ['errorRadiusM', 'error_radius_m', 'locErrorM', 'errorm', 'errm']);
+  if (meters !== null) {
+    return meters / 1000;
+  }
+
+  const miles = getNumber(obRecord, ['errorRadiusMi', 'error_radius_mi', 'errorRadiusMiles', 'locErrorMi', 'errormi']);
+  if (miles !== null) {
+    return miles * KM_PER_MILE;
+  }
+
+  const generic = getNumber(obRecord, ['errorRadius', 'error_radius', 'locError', 'locerr', 'error', 'err']);
+  if (generic !== null) {
+    // xWeather precision fields are typically in km when the unit suffix is omitted.
+    return generic;
+  }
+
+  return undefined;
+}
 
 export class XWeatherProvider implements LightningProvider {
   async getRecentStrikes(query: LightningQuery): Promise<LightningResponse> {
@@ -73,6 +121,7 @@ export class XWeatherProvider implements LightningProvider {
     );
     const activeStrikeCount = observations.filter((strike) => (strike.ob.age ?? Number.MAX_SAFE_INTEGER) <= ACTIVE_STRIKE_MAX_AGE_SECONDS).length;
     const freshStrikeCount = observations.filter((strike) => (strike.ob.age ?? Number.MAX_SAFE_INTEGER) <= FRESH_STRIKE_MAX_AGE_SECONDS).length;
+    const precisionCount = strikes.filter((strike) => typeof strike.errorRadiusKm === 'number').length;
 
     return {
       provider: 'xweather',
@@ -87,6 +136,7 @@ export class XWeatherProvider implements LightningProvider {
         notes: [
           `${strikes.length} strikes parsed from xWeather lightning/closest response array`,
           `${freshStrikeCount} strikes are fresh (ob.age <= 120s), ${Math.max(0, strikes.length - freshStrikeCount)} are aging`,
+          `${precisionCount} strikes include source precision/error-radius metadata`,
         ],
       },
     };
@@ -138,6 +188,7 @@ export class XWeatherProvider implements LightningProvider {
       ageSeconds: strikeAgeSeconds,
       strikeType,
       peakAmpKa: peakAmp,
+      errorRadiusKm: extractErrorRadiusKm(obs.ob),
     };
   }
 }
