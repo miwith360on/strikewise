@@ -4,15 +4,16 @@ import { enrichLightningResponse } from '../lib/lightningAnalysis.js';
 import { createLightningProvider } from '../providers/index.js';
 import type { BoundingBox, LightningQuery, LightningResponse } from '../types/lightning.js';
 
-const CACHE_TTL_MS = 4_000;
+const CACHE_TTL_MS = 45_000;
 const CACHE_MAX_ENTRIES = 500;
 const provider = createLightningProvider();
 const responseCache = new Map<string, { cachedAt: number; payload: LightningResponse }>();
+const inflightRequests = new Map<string, Promise<LightningResponse>>();
 
 function pruneCache() {
   const now = Date.now();
   for (const [key, entry] of responseCache) {
-    if (now - entry.cachedAt > CACHE_TTL_MS * 6) {
+    if (now - entry.cachedAt > CACHE_TTL_MS * 8) {
       responseCache.delete(key);
     }
   }
@@ -63,6 +64,64 @@ function toQueryKey(query: LightningQuery) {
   });
 }
 
+async function getCachedOrFetch(query: LightningQuery, cacheKey: string): Promise<{
+  payload: LightningResponse;
+  cached: boolean;
+  cachedAt: number;
+}> {
+  const now = Date.now();
+  const cachedEntry = responseCache.get(cacheKey);
+  if (cachedEntry && now - cachedEntry.cachedAt < CACHE_TTL_MS) {
+    return {
+      payload: cachedEntry.payload,
+      cached: true,
+      cachedAt: cachedEntry.cachedAt,
+    };
+  }
+
+  const existingInflight = inflightRequests.get(cacheKey);
+  if (existingInflight) {
+    const payload = await existingInflight;
+    const refreshed = responseCache.get(cacheKey);
+    return {
+      payload,
+      cached: true,
+      cachedAt: refreshed?.cachedAt ?? Date.now(),
+    };
+  }
+
+  const requestPromise = (async () => {
+    const freshPayload = await provider.getRecentStrikes(query);
+    responseCache.set(cacheKey, { cachedAt: Date.now(), payload: freshPayload });
+    pruneCache();
+    return freshPayload;
+  })();
+
+  inflightRequests.set(cacheKey, requestPromise);
+
+  try {
+    const payload = await requestPromise;
+    const refreshed = responseCache.get(cacheKey);
+    return {
+      payload,
+      cached: false,
+      cachedAt: refreshed?.cachedAt ?? Date.now(),
+    };
+  } catch (error) {
+    // Reliability fallback: serve stale data if upstream is temporarily failing.
+    if (cachedEntry) {
+      return {
+        payload: cachedEntry.payload,
+        cached: true,
+        cachedAt: cachedEntry.cachedAt,
+      };
+    }
+    throw error;
+  } finally {
+    inflightRequests.delete(cacheKey);
+  }
+}
+
 lightningRouter.get('/', async (request, response, next) => {
   try {
     const query = querySchema.parse(request.query);
@@ -71,40 +130,35 @@ lightningRouter.get('/', async (request, response, next) => {
       minutes: query.minutes,
     };
     const cacheKey = toQueryKey(normalizedQuery);
-    const cachedEntry = responseCache.get(cacheKey);
-    const isCacheHit = cachedEntry !== undefined && Date.now() - cachedEntry.cachedAt < CACHE_TTL_MS;
 
     let payload: LightningResponse;
-    if (isCacheHit) {
-      payload = cachedEntry.payload;
-    } else {
-      try {
-        payload = await provider.getRecentStrikes(normalizedQuery);
-        responseCache.set(cacheKey, { cachedAt: Date.now(), payload });
-        pruneCache();
-      } catch (providerError) {
-        const msg = providerError instanceof Error ? providerError.message : 'Provider error';
-        payload = {
-          provider: 'error',
-          generatedAt: Date.now(),
-          strikes: [],
-          meta: {
-            simulated: false,
-            source: 'provider-error',
-            providerStatus: 'degraded',
-            notes: [`Provider failed: ${msg}`],
-          },
-        };
-      }
+    let cacheState: { cached: boolean; cachedAt: number } = { cached: false, cachedAt: Date.now() };
+    try {
+      const result = await getCachedOrFetch(normalizedQuery, cacheKey);
+      payload = result.payload;
+      cacheState = { cached: result.cached, cachedAt: result.cachedAt };
+    } catch (providerError) {
+      const msg = providerError instanceof Error ? providerError.message : 'Provider error';
+      payload = {
+        provider: 'error',
+        generatedAt: Date.now(),
+        strikes: [],
+        meta: {
+          simulated: false,
+          source: 'provider-error',
+          providerStatus: 'degraded',
+          notes: [`Provider failed: ${msg}`],
+        },
+      };
     }
 
     const analyzedPayload = enrichLightningResponse(
       normalizedQuery,
       payload,
-      isCacheHit && cachedEntry
+      cacheState.cached
         ? {
             cached: true,
-            cacheAgeSeconds: Math.max(0, Math.round((Date.now() - cachedEntry.cachedAt) / 1000)),
+            cacheAgeSeconds: Math.max(0, Math.round((Date.now() - cacheState.cachedAt) / 1000)),
           }
         : {
             cached: false,

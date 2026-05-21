@@ -76,12 +76,13 @@ export function useLightningFeed(): LightningFeedState {
       ? 'Demo feed only'
       : 'Connecting to live lightning feed',
   );
+  const monitored = alertConfig.monitored;
 
   // Connect once so the service can choose HTTP or mock mode before subscribing.
   useEffect(() => {
     let cancelled = false;
     let unsub = () => {};
-    const bounds = getBoundsForLocation(alertConfig.monitored);
+    const bounds = getBoundsForLocation(monitored);
 
     setNewestStrikeId(null);
     setIsLive(lightningServiceMode === 'demo');
@@ -171,7 +172,7 @@ export function useLightningFeed(): LightningFeedState {
       cancelled = true;
       unsub();
     };
-  }, [alertConfig.monitored]);
+  }, [monitored.id, monitored.lat, monitored.lng]);
 
   const setAlertConfig = useCallback((cfg: AlertConfig) => {
     setAlertConfigState(cfg);

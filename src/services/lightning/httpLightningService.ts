@@ -19,9 +19,9 @@ import type {
 import { buildSafetyStatus, buildThunderETAs } from './insights';
 import { haversineKm } from './geo';
 
-const MIN_POLL_INTERVAL_MS = 3_000;   // < 15 km — storm is very close
-const MID_POLL_INTERVAL_MS = 4_500;   // 15–30 km — storm approaching
-const MAX_POLL_INTERVAL_MS = 6_000;   // > 30 km — normal rate
+const MIN_POLL_INTERVAL_MS = 15_000;  // < 15 km — storm is very close
+const MID_POLL_INTERVAL_MS = 20_000;  // 15–30 km — storm approaching
+const MAX_POLL_INTERVAL_MS = 30_000;  // > 30 km — normal rate
 
 function boundsCenter(bounds: MapBounds): LatLng {
   return {

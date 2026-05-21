@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { divIcon } from 'leaflet';
 import {
   Circle,
@@ -29,6 +29,7 @@ const PREDICTION_STROKE = '#b56cff';
 const CLUSTER_STROKE = '#ff9f43';
 const NEXRAD_WMS_URL = 'https://opengeo.ncep.noaa.gov/geoserver/conus/conus_bref_qcd/ows';
 const NEXRAD_WMS_LAYER = 'conus_bref_qcd';
+const RADAR_REFRESH_DEBOUNCE_MS = 300;
 const predictionLabelIcon = divIcon({
   className: 'storm-prediction-label',
   html: '<div></div>',
@@ -206,6 +207,73 @@ function MapClickCapture({ onMoveMonitoredLocation }: { onMoveMonitoredLocation:
   return null;
 }
 
+function DebouncedRadarLayer() {
+  const [isInteracting, setIsInteracting] = useState(false);
+  const [refreshToken, setRefreshToken] = useState(() => Date.now());
+  const refreshTimerRef = useRef<number | null>(null);
+
+  const scheduleRefresh = () => {
+    if (refreshTimerRef.current !== null) {
+      window.clearTimeout(refreshTimerRef.current);
+    }
+    refreshTimerRef.current = window.setTimeout(() => {
+      setIsInteracting(false);
+      setRefreshToken(Date.now());
+      refreshTimerRef.current = null;
+    }, RADAR_REFRESH_DEBOUNCE_MS);
+  };
+
+  useMapEvents({
+    movestart() {
+      setIsInteracting(true);
+      if (refreshTimerRef.current !== null) {
+        window.clearTimeout(refreshTimerRef.current);
+        refreshTimerRef.current = null;
+      }
+    },
+    zoomstart() {
+      setIsInteracting(true);
+      if (refreshTimerRef.current !== null) {
+        window.clearTimeout(refreshTimerRef.current);
+        refreshTimerRef.current = null;
+      }
+    },
+    moveend() {
+      scheduleRefresh();
+    },
+    zoomend() {
+      scheduleRefresh();
+    },
+  });
+
+  useEffect(() => {
+    return () => {
+      if (refreshTimerRef.current !== null) {
+        window.clearTimeout(refreshTimerRef.current);
+      }
+    };
+  }, []);
+
+  if (isInteracting) {
+    return null;
+  }
+
+  return (
+    <WMSTileLayer
+      key={`nexrad-${refreshToken}`}
+      url={NEXRAD_WMS_URL}
+      layers={NEXRAD_WMS_LAYER}
+      format="image/png"
+      transparent
+      opacity={0.35}
+      version="1.3.0"
+      pane="radar-overlay"
+      attribution="NOAA/NWS NEXRAD"
+      updateWhenIdle
+    />
+  );
+}
+
 function strikeAgeSeconds(strike: LightningStrike): number {
   if (typeof strike.ageSeconds === 'number' && Number.isFinite(strike.ageSeconds)) {
     return Math.max(0, Math.round(strike.ageSeconds));
@@ -262,7 +330,7 @@ export function LightningMap({
   onSelectStrike,
   onMoveMonitoredLocation,
 }: LightningMapProps) {
-  const center: [number, number] = [monitored.lat, monitored.lng];
+  const center = useMemo<[number, number]>(() => [monitored.lat, monitored.lng], [monitored.lat, monitored.lng]);
   const [prediction, setPrediction] = useState<PredictionOverlayData | null>(null);
 
   useEffect(() => {
@@ -313,16 +381,7 @@ export function LightningMap({
 
       {/* Live NEXRAD radar WMS overlay above base map and below strike layers */}
       <Pane name="radar-overlay" style={{ zIndex: 320 }}>
-        <WMSTileLayer
-          url={NEXRAD_WMS_URL}
-          layers={NEXRAD_WMS_LAYER}
-          format="image/png"
-          transparent
-          opacity={0.35}
-          version="1.3.0"
-          pane="radar-overlay"
-          attribution='NOAA/NWS NEXRAD'
-        />
+        <DebouncedRadarLayer />
       </Pane>
 
       <MapCenterEffect center={center} />
