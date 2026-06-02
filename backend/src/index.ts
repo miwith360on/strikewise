@@ -49,7 +49,8 @@ app.use((error: unknown, _request: express.Request, response: express.Response, 
   }
 
   const message = error instanceof Error ? error.message : 'Internal server error';
-  response.status(500).json({ error: message });
+  const safeMessage = env.NODE_ENV === 'production' ? 'Internal server error' : message;
+  response.status(500).json({ error: safeMessage });
 });
 
 app.listen(env.PORT, '0.0.0.0', () => {

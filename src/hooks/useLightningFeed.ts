@@ -172,7 +172,7 @@ export function useLightningFeed(): LightningFeedState {
       cancelled = true;
       unsub();
     };
-  }, [monitored.id, monitored.lat, monitored.lng]);
+  }, [monitored]);
 
   const setAlertConfig = useCallback((cfg: AlertConfig) => {
     setAlertConfigState(cfg);

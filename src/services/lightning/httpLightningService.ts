@@ -23,6 +23,65 @@ const MIN_POLL_INTERVAL_MS = 15_000;  // < 15 km — storm is very close
 const MID_POLL_INTERVAL_MS = 20_000;  // 15–30 km — storm approaching
 const MAX_POLL_INTERVAL_MS = 30_000;  // > 30 km — normal rate
 
+type LightningApiPayload = {
+  provider: string;
+  generatedAt: number;
+  strikes: LightningStrike[];
+  meta: Omit<LightningFeedMeta, 'provider' | 'generatedAt'>;
+};
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
+function isLightningStrike(value: unknown): value is LightningStrike {
+  if (!isRecord(value)) return false;
+
+  return (
+    typeof value.id === 'string'
+    && typeof value.lat === 'number'
+    && Number.isFinite(value.lat)
+    && typeof value.lng === 'number'
+    && Number.isFinite(value.lng)
+    && typeof value.timestamp === 'number'
+    && Number.isFinite(value.timestamp)
+    && typeof value.intensityKa === 'number'
+    && Number.isFinite(value.intensityKa)
+    && (value.polarity === 'negative' || value.polarity === 'positive')
+    && typeof value.multiplicity === 'number'
+    && Number.isFinite(value.multiplicity)
+  );
+}
+
+function parseLightningApiPayload(raw: unknown): LightningApiPayload {
+  if (!isRecord(raw)) {
+    throw new Error('Invalid lightning payload: expected an object');
+  }
+
+  if (typeof raw.provider !== 'string' || typeof raw.generatedAt !== 'number' || !Number.isFinite(raw.generatedAt)) {
+    throw new Error('Invalid lightning payload metadata');
+  }
+
+  if (!Array.isArray(raw.strikes)) {
+    throw new Error('Invalid lightning payload: strikes must be an array');
+  }
+
+  if (!raw.strikes.every((strike) => isLightningStrike(strike))) {
+    throw new Error('Invalid lightning payload: malformed strike entry');
+  }
+
+  if (!isRecord(raw.meta)) {
+    throw new Error('Invalid lightning payload: meta must be an object');
+  }
+
+  return {
+    provider: raw.provider,
+    generatedAt: raw.generatedAt,
+    strikes: raw.strikes,
+    meta: raw.meta as Omit<LightningFeedMeta, 'provider' | 'generatedAt'>,
+  };
+}
+
 function boundsCenter(bounds: MapBounds): LatLng {
   return {
     lat: (bounds.northEast.lat + bounds.southWest.lat) / 2,
@@ -92,12 +151,8 @@ export class HttpLightningService implements ILightningService {
     const res = await fetch(`${this.baseUrl}/api/lightning?${params}`);
     if (!res.ok) throw new Error(`Lightning API responded with ${res.status}`);
 
-    const data = await res.json() as {
-      provider: string;
-      generatedAt: number;
-      strikes: LightningStrike[];
-      meta: Omit<LightningFeedMeta, 'provider' | 'generatedAt'>;
-    };
+    const raw = await res.json();
+    const data = parseLightningApiPayload(raw);
     this._latestMeta = {
       ...data.meta,
       provider: data.provider,

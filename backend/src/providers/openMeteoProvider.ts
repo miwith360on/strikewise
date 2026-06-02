@@ -12,6 +12,7 @@
 // ─────────────────────────────────────────────────────────────────
 
 import { createHash } from 'crypto';
+import { z } from 'zod';
 
 import type {
   LightningProvider,
@@ -33,6 +34,15 @@ interface OpenMeteoResponse {
     lightning_potential: number[];   // 0–100 per hour
   };
 }
+
+const openMeteoResponseSchema = z.object({
+  latitude: z.number(),
+  longitude: z.number(),
+  hourly: z.object({
+    time: z.array(z.string()),
+    lightning_potential: z.array(z.number()),
+  }),
+});
 
 /** Derive a lat/lng center from the query bounds, or fall back to a default. */
 function centerFromQuery(query: LightningQuery): { lat: number; lng: number } {
@@ -133,7 +143,12 @@ export class OpenMeteoProvider implements LightningProvider {
       throw new Error(`Open-Meteo API responded with ${res.status}`);
     }
 
-    const data = await res.json() as OpenMeteoResponse;
+    const raw = await res.json();
+    const parsed = openMeteoResponseSchema.safeParse(raw);
+    if (!parsed.success) {
+      throw new Error('Invalid Open-Meteo response payload');
+    }
+    const data: OpenMeteoResponse = parsed.data;
     const { time, lightning_potential } = data.hourly;
 
     // Find which hours fall within the query window (now − minutes → now)

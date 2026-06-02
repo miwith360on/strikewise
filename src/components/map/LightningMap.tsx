@@ -61,6 +61,75 @@ interface PredictionOverlayData {
   confidencePercent: number;
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
+function parseMlPredictionPayload(raw: unknown): MlPredictionResponse {
+  if (!isRecord(raw)) {
+    throw new Error('Invalid ML prediction payload: expected an object');
+  }
+
+  if (typeof raw.ready !== 'boolean') {
+    throw new Error('Invalid ML prediction payload: ready must be boolean');
+  }
+
+  const confidence = raw.confidence;
+  if (confidence !== undefined && (typeof confidence !== 'number' || !Number.isFinite(confidence))) {
+    throw new Error('Invalid ML prediction payload: confidence must be numeric when present');
+  }
+
+  const predictedBoundingBox = raw.predictedBoundingBox;
+  if (predictedBoundingBox !== undefined) {
+    if (!isRecord(predictedBoundingBox)) {
+      throw new Error('Invalid ML prediction payload: predictedBoundingBox must be an object');
+    }
+    const bboxValues = [
+      predictedBoundingBox.north,
+      predictedBoundingBox.south,
+      predictedBoundingBox.east,
+      predictedBoundingBox.west,
+    ];
+    if (bboxValues.some((value) => typeof value !== 'number' || !Number.isFinite(value))) {
+      throw new Error('Invalid ML prediction payload: predictedBoundingBox values must be numbers');
+    }
+  }
+
+  const predictedCenter = raw.predictedCenter;
+  if (predictedCenter !== undefined) {
+    if (!isRecord(predictedCenter)) {
+      throw new Error('Invalid ML prediction payload: predictedCenter must be an object');
+    }
+    if (
+      typeof predictedCenter.lat !== 'number'
+      || !Number.isFinite(predictedCenter.lat)
+      || typeof predictedCenter.lng !== 'number'
+      || !Number.isFinite(predictedCenter.lng)
+    ) {
+      throw new Error('Invalid ML prediction payload: predictedCenter values must be numbers');
+    }
+  }
+
+  const clusterSamples = raw.clusterSamples;
+  if (clusterSamples !== undefined && (typeof clusterSamples !== 'number' || !Number.isFinite(clusterSamples))) {
+    throw new Error('Invalid ML prediction payload: clusterSamples must be numeric when present');
+  }
+
+  const timeBuckets = raw.timeBuckets;
+  if (timeBuckets !== undefined && (typeof timeBuckets !== 'number' || !Number.isFinite(timeBuckets))) {
+    throw new Error('Invalid ML prediction payload: timeBuckets must be numeric when present');
+  }
+
+  return {
+    ready: raw.ready,
+    confidence: confidence as number | undefined,
+    predictedBoundingBox: predictedBoundingBox as MlPredictionResponse['predictedBoundingBox'],
+    predictedCenter: predictedCenter as MlPredictionResponse['predictedCenter'],
+    clusterSamples: clusterSamples as number | undefined,
+    timeBuckets: timeBuckets as number | undefined,
+  };
+}
+
 // ── Strike trail: fading polyline showing storm motion ────────────
 function StrikeTrail({ strikes }: { strikes: LightningStrike[] }) {
   // Sort by time, keep last 30 min, bucket into 3-min slots to draw a motion path
@@ -340,7 +409,8 @@ export function LightningMap({
       try {
         const response = await fetch(ML_PREDICTION_URL);
         if (!response.ok) return;
-        const payload = await response.json() as MlPredictionResponse;
+        const raw = await response.json();
+        const payload = parseMlPredictionPayload(raw);
         if (cancelled) return;
 
         if (!payload.ready || !payload.predictedBoundingBox || !payload.predictedCenter) {

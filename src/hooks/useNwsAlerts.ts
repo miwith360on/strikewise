@@ -23,6 +23,60 @@ export interface NwsAlertsState {
   outsideUs: boolean;
 }
 
+type NwsAlertsPayload = {
+  active: boolean;
+  maxSeverity: string | null;
+  alerts: NwsAlert[];
+  region?: string;
+};
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
+function isNwsAlert(value: unknown): value is NwsAlert {
+  if (!isRecord(value)) return false;
+  return (
+    typeof value.id === 'string'
+    && typeof value.event === 'string'
+    && typeof value.severity === 'string'
+    && typeof value.urgency === 'string'
+    && typeof value.headline === 'string'
+    && (value.expires === null || typeof value.expires === 'string')
+    && (value.effective === null || typeof value.effective === 'string')
+    && typeof value.senderName === 'string'
+  );
+}
+
+function parseNwsAlertsPayload(raw: unknown): NwsAlertsPayload {
+  if (!isRecord(raw)) {
+    throw new Error('Invalid alerts payload: expected an object');
+  }
+
+  if (typeof raw.active !== 'boolean') {
+    throw new Error('Invalid alerts payload: active must be boolean');
+  }
+
+  if (raw.maxSeverity !== null && typeof raw.maxSeverity !== 'string') {
+    throw new Error('Invalid alerts payload: maxSeverity must be string or null');
+  }
+
+  if (!Array.isArray(raw.alerts) || !raw.alerts.every((alert) => isNwsAlert(alert))) {
+    throw new Error('Invalid alerts payload: malformed alerts array');
+  }
+
+  if (raw.region !== undefined && typeof raw.region !== 'string') {
+    throw new Error('Invalid alerts payload: region must be a string when present');
+  }
+
+  return {
+    active: raw.active,
+    maxSeverity: raw.maxSeverity,
+    alerts: raw.alerts,
+    region: raw.region,
+  };
+}
+
 export function useNwsAlerts(location: MonitoredLocation): NwsAlertsState {
   const [state, setState] = useState<NwsAlertsState>({
     active: false,
@@ -44,12 +98,8 @@ export function useNwsAlerts(location: MonitoredLocation): NwsAlertsState {
           `${BASE_URL}/api/alerts?lat=${location.lat}&lng=${location.lng}`,
         );
         if (!res.ok) throw new Error(`NWS proxy ${res.status}`);
-        const data = await res.json() as {
-          active: boolean;
-          maxSeverity: string | null;
-          alerts: NwsAlert[];
-          region?: string;
-        };
+        const raw = await res.json();
+        const data = parseNwsAlertsPayload(raw);
         if (cancelledRef.current) return;
         setState({
           active: data.active,

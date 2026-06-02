@@ -13,6 +13,7 @@
 // ─────────────────────────────────────────────────────────────────
 
 import { createHash } from 'crypto';
+import { z } from 'zod';
 
 import { env } from '../config/env.js';
 import type {
@@ -49,6 +50,26 @@ interface TomorrowResponse {
     timelines: TomorrowTimeline[];
   };
 }
+
+const tomorrowResponseSchema = z.object({
+  data: z.object({
+    timelines: z.array(
+      z.object({
+        timestep: z.string(),
+        startTime: z.string(),
+        endTime: z.string(),
+        intervals: z.array(
+          z.object({
+            startTime: z.string(),
+            values: z.object({
+              lightningFlashRateDensity: z.number().optional(),
+            }),
+          }),
+        ),
+      }),
+    ),
+  }),
+});
 
 function centerFromQuery(query: LightningQuery): { lat: number; lng: number } {
   if (query.bounds) {
@@ -138,9 +159,13 @@ export class TomorrowProvider implements LightningProvider {
       endTime,
     };
 
-    const res = await fetch(`${BASE_URL}?apikey=${encodeURIComponent(apiKey)}`, {
+    const res = await fetch(BASE_URL, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+        apikey: apiKey,
+      },
       body: JSON.stringify(body),
     });
 
@@ -166,7 +191,12 @@ export class TomorrowProvider implements LightningProvider {
       throw new Error(`Tomorrow.io API error ${res.status}: ${text.slice(0, 200)}`);
     }
 
-    const data = await res.json() as TomorrowResponse;
+    const raw = await res.json();
+    const parsed = tomorrowResponseSchema.safeParse(raw);
+    if (!parsed.success) {
+      throw new Error('Invalid Tomorrow.io response payload');
+    }
+    const data: TomorrowResponse = parsed.data;
     const timelines = data?.data?.timelines ?? [];
     const timeline = timelines.find((t) => t.timestep === '1m') ?? timelines[0];
     const intervals = timeline?.intervals ?? [];

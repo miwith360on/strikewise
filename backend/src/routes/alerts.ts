@@ -55,6 +55,29 @@ interface NwsApiResponse {
   features?: NwsFeature[];
 }
 
+const nwsApiResponseSchema = z.object({
+  features: z
+    .array(
+      z.object({
+        id: z.string().optional(),
+        properties: z
+          .object({
+            event: z.string().optional(),
+            severity: z.string().optional(),
+            urgency: z.string().optional(),
+            certainty: z.string().optional(),
+            headline: z.string().optional(),
+            description: z.string().optional(),
+            effective: z.string().optional(),
+            expires: z.string().optional(),
+            senderName: z.string().optional(),
+          })
+          .optional(),
+      }),
+    )
+    .optional(),
+});
+
 export interface NwsAlert {
   id: string;
   event: string;
@@ -100,7 +123,12 @@ alertsRouter.get('/', async (request, response, next) => {
       throw new Error(`NWS API responded with ${res.status}`);
     }
 
-    const data = await res.json() as NwsApiResponse;
+    const raw = await res.json();
+    const parsedPayload = nwsApiResponseSchema.safeParse(raw);
+    if (!parsedPayload.success) {
+      throw new Error('Invalid NWS response payload');
+    }
+    const data: NwsApiResponse = parsedPayload.data;
     const features = data.features ?? [];
 
     const alerts: NwsAlert[] = features

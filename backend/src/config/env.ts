@@ -10,7 +10,7 @@ const providerSchema = z.preprocess(
     const normalized = value
       .trim()
       .replace(/^=+/, '')
-      .replace(/^['\"]|['\"]$/g, '')
+      .replace(/^["']|["']$/g, '')
       .toLowerCase();
     return normalized.length > 0 ? normalized : undefined;
   },
@@ -33,7 +33,7 @@ const envSchema = z.object({
 
 const mergedEnv = {
   ...process.env,
-  CORS_ORIGIN: process.env.CORS_ORIGIN ?? process.env.CORS_ORIGNS,
+  CORS_ORIGIN: process.env.CORS_ORIGIN ?? process.env.CORS_ORIGINS ?? process.env.CORS_ORIGNS,
 };
 
 export const env = envSchema.parse(mergedEnv);

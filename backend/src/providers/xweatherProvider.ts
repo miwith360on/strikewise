@@ -9,6 +9,7 @@
 //   XWEATHER_CLIENT_SECRET
 // ─────────────────────────────────────────────────────────────────
 
+import { z } from 'zod';
 import { env } from '../config/env.js';
 import { getBoundsCenter, haversineKm } from '../lib/geo.js';
 import type {
@@ -19,29 +20,43 @@ import type {
   LightningStrike,
 } from '../types/lightning.js';
 
-interface XWeatherObservation {
-  id: string;
-  loc: { lat: number; long: number };
-  ob: {
-    age?: number;              // Strike age in seconds
-    pulse?: {
-      type?: string;           // "cg" | "ic"
-      peakamp?: number;        // Signed peak current in kA
-      [key: string]: unknown;
-    };
-    timestamp?: number;        // Optional Unix seconds fallback
-    peakamp?: number;          // Legacy fallback
-    type?: string;             // Legacy fallback
-    count?: number;            // Flash multiplicity
-    [key: string]: unknown;
-  };
-}
+const xWeatherObservationSchema = z.object({
+  id: z.string().optional(),
+  loc: z.object({
+    lat: z.number(),
+    long: z.number(),
+  }),
+  ob: z
+    .object({
+      age: z.number().optional(),
+      pulse: z
+        .object({
+          type: z.string().optional(),
+          peakamp: z.number().optional(),
+        })
+        .passthrough()
+        .optional(),
+      timestamp: z.number().optional(),
+      peakamp: z.number().optional(),
+      type: z.string().optional(),
+      count: z.number().optional(),
+    })
+    .passthrough(),
+});
 
-interface XWeatherResponse {
-  success: boolean;
-  error?: { code: string; description: string };
-  response?: XWeatherObservation[];
-}
+const xWeatherResponseSchema = z.object({
+  success: z.boolean(),
+  error: z
+    .object({
+      code: z.string(),
+      description: z.string(),
+    })
+    .optional(),
+  response: z.array(xWeatherObservationSchema).optional(),
+});
+
+type XWeatherObservation = z.infer<typeof xWeatherObservationSchema>;
+type XWeatherResponse = z.infer<typeof xWeatherResponseSchema>;
 
 const BASE_URL = 'https://api.aerisapi.com';
 const ACTIVE_STRIKE_MAX_AGE_SECONDS = 600;
@@ -108,7 +123,12 @@ export class XWeatherProvider implements LightningProvider {
       throw new Error(`xWeather API HTTP error: ${res.status}`);
     }
 
-    const data = await res.json() as XWeatherResponse;
+    const raw = await res.json();
+    const parsed = xWeatherResponseSchema.safeParse(raw);
+    if (!parsed.success) {
+      throw new Error('Invalid xWeather response payload');
+    }
+    const data: XWeatherResponse = parsed.data;
 
     if (!data.success) {
       const msg = data.error?.description ?? 'Unknown xWeather error';
