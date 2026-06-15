@@ -154,7 +154,7 @@ export default function LandingPage() {
             variant="ghost"
             size="lg"
             className="flex-1"
-            onClick={() => navigate('/dashboard')}
+            onClick={() => navigate('/dashboard?demo=1')}
           >
             See Demo
           </Button>

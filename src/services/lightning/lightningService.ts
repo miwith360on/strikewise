@@ -28,9 +28,10 @@ import {
   buildThunderETAs,
 } from './insights';
 import {
+  createStormLoopFrame,
   DEFAULT_LOCATION,
-  generateLiveStrike,
   generateSeedStrikes,
+  STRIKE_LIFETIME_MS,
 } from './mockData';
 import { HttpLightningService } from './httpLightningService';
 
@@ -41,8 +42,8 @@ class MockLightningService implements ILightningService {
   private _latestMeta: LightningFeedMeta | null = null;
 
   constructor() {
-    // Pre-populate with a realistic spread
-    this._strikes = generateSeedStrikes(DEFAULT_LOCATION, 32, 50);
+    // Pre-populate with recent history so strike colors and safety transitions are visible.
+    this._strikes = generateSeedStrikes(DEFAULT_LOCATION, 18, 42);
   }
 
   // ── Public API ───────────────────────────────────────────────
@@ -87,15 +88,28 @@ class MockLightningService implements ILightningService {
     _minutes: number,
     onStrike: (strike: LightningStrike) => void,
   ): () => void {
-    // Emit a new strike every 2–5 seconds (realistic storm frequency)
-    const interval = setInterval(() => {
-      this._prune();
-      const strike = generateLiveStrike(DEFAULT_LOCATION, strikeCounter++);
-      this._strikes.push(strike);
-      onStrike(strike);
-    }, this._nextInterval());
+    let timer: ReturnType<typeof setTimeout> | null = null;
 
-    return () => clearInterval(interval);
+    const emitFrame = () => {
+      this._prune();
+      const frame = createStormLoopFrame(strikeCounter);
+      strikeCounter = frame.nextIndex;
+      for (const strike of frame.strikes) {
+        this._strikes.push(strike);
+        onStrike(strike);
+      }
+
+      timer = setTimeout(emitFrame, frame.frameIntervalMs);
+    };
+
+    // Emit new storm frames every few seconds for an evolving demo loop.
+    emitFrame();
+
+    return () => {
+      if (timer) {
+        clearTimeout(timer);
+      }
+    };
   }
 
   getSafetyStatus(
@@ -119,24 +133,23 @@ class MockLightningService implements ILightningService {
   }
 
   private _prune() {
-    const cutoff = Date.now() - ALL_CLEAR_WINDOW_MS;
+    const cutoff = Date.now() - STRIKE_LIFETIME_MS;
     this._strikes = this._strikes.filter((s) => s.timestamp > cutoff);
   }
 
-  private _nextInterval(): number {
-    // Random between 2 000 and 4 500 ms
-    return 2000 + Math.random() * 2500;
-  }
 }
 
 // ─────────────────────────────────────────────────────────────────
 // Singleton export
 //
-// Use demo data only in local development without an API override.
-// Production always targets the backend API so real-feed failures are visible.
+// Use live data by default. Demo mode can be forced with ?demo=1 for
+// product previews, and remains automatic in local dev when no API URL is set.
 // ─────────────────────────────────────────────────────────────────
 const configuredApiUrl = import.meta.env.VITE_API_URL?.trim();
-const useDemoMode = !import.meta.env.PROD && (!configuredApiUrl || configuredApiUrl.length === 0);
+const forceDemoFromQuery = typeof window !== 'undefined'
+  && new URLSearchParams(window.location.search).get('demo') === '1';
+const useDemoMode = forceDemoFromQuery
+  || (!import.meta.env.PROD && (!configuredApiUrl || configuredApiUrl.length === 0));
 const apiUrl = configuredApiUrl && configuredApiUrl.length > 0 ? configuredApiUrl : '';
 
 export const lightningServiceMode: 'demo' | 'live' = useDemoMode ? 'demo' : 'live';

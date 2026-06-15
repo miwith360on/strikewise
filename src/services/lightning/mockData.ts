@@ -30,6 +30,13 @@ export const DEFAULT_LOCATION: MonitoredLocation = {
   lng: -96.797,
 };
 
+const LOOP_DURATION_MS = 3 * 60 * 1000;
+const STRIKE_LIFETIME_MS = 10 * 60 * 1000;
+const FRAME_INTERVAL_MS = 2500;
+
+const CORRIDOR_START = { lat: 33.05, lng: -97.45 };
+const CORRIDOR_END = { lat: 32.45, lng: -96.35 };
+
 // ─────────────────────────────────────────────────────────────────
 // Strike generator helpers
 // ─────────────────────────────────────────────────────────────────
@@ -92,3 +99,76 @@ export function generateLiveStrike(
   const close = rng() < 0.3;
   return randomStrike(center, close ? 15 : 50, 0, index);
 }
+
+function lerp(start: number, end: number, t: number) {
+  return start + (end - start) * t;
+}
+
+function stormRamp(phase: number) {
+  // Triangle wave: 0 -> 1 -> 0 over a 3-minute loop.
+  return phase < 0.5 ? phase * 2 : (1 - phase) * 2;
+}
+
+function corridorPoint(phase: number) {
+  return {
+    lat: lerp(CORRIDOR_START.lat, CORRIDOR_END.lat, phase),
+    lng: lerp(CORRIDOR_START.lng, CORRIDOR_END.lng, phase),
+  };
+}
+
+function stormCenter(phase: number) {
+  const along = (phase + 0.08 * Math.sin(phase * Math.PI * 2)) % 1;
+  const point = corridorPoint(along);
+  // Slight lateral wobble keeps frames dynamic while preserving a corridor path.
+  const wobbleKm = 5 * Math.sin(phase * Math.PI * 6);
+  return {
+    lat: point.lat + kmToLatDeg(wobbleKm),
+    lng: point.lng + kmToLngDeg(wobbleKm * 0.4, point.lat),
+  };
+}
+
+function burstCount(phase: number) {
+  const ramp = stormRamp(phase);
+  if (ramp > 0.9) return 5;
+  if (ramp > 0.75) return 4;
+  if (ramp > 0.55) return 3;
+  if (ramp > 0.3) return 2;
+  if (ramp > 0.12) return 1;
+  return 0;
+}
+
+export function createStormLoopFrame(
+  indexStart: number,
+  now = Date.now(),
+): { strikes: LightningStrike[]; nextIndex: number; frameIntervalMs: number } {
+  const phase = (now % LOOP_DURATION_MS) / LOOP_DURATION_MS;
+  const ramp = stormRamp(phase);
+  const center = stormCenter(phase);
+  const freshCount = burstCount(phase);
+  let nextIndex = indexStart;
+
+  const strikes: LightningStrike[] = [];
+
+  if (freshCount === 0) {
+    // Keep the feed moving with distant, old strikes during calm phases.
+    strikes.push(randomStrike(center, 70, randBetween(8 * 60 * 1000, 9.5 * 60 * 1000), nextIndex));
+    nextIndex += 1;
+  } else {
+    for (let i = 0; i < freshCount; i += 1) {
+      const spreadKm = 7 + ramp * 10;
+      // Calm phases emit older strikes; peak phases emit fresh strikes.
+      const ageMs = randBetween((1 - ramp) * 8 * 60 * 1000, (1 - ramp) * 9.5 * 60 * 1000);
+      const strike = randomStrike(center, spreadKm, ageMs, nextIndex);
+      strikes.push(strike);
+      nextIndex += 1;
+    }
+  }
+
+  return {
+    strikes,
+    nextIndex,
+    frameIntervalMs: FRAME_INTERVAL_MS,
+  };
+}
+
+export { STRIKE_LIFETIME_MS };
