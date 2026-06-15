@@ -376,14 +376,17 @@ export default function DashboardPage() {
                 <span className="h-2 w-2 rounded-full bg-plasma-500" /> monitored point
               </div>
               <div className="mt-2 flex max-w-full flex-wrap items-center gap-x-3 gap-y-1 text-[10px] font-mono text-storm-400">
-                <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-bolt-500" /> fresh strike</span>
-                <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-[#ff3333]" /> aging strike</span>
+                <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-[#ff3333]" /> fresh strike</span>
+                <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-[#8aa0c8]" /> aging strike</span>
               </div>
             </div>
 
-            <div className="pointer-events-none absolute inset-x-3 bottom-3 z-[1000] flex max-w-[calc(100vw-1.5rem)] flex-col gap-1 text-[9px] font-mono text-storm-600 lg:max-w-[calc(100%-1.5rem)]">
-              <div>Preview feed · Not for safety-critical decisions</div>
-              <div>Leaflet | OpenStreetMap contributors</div>
+            <div className="pointer-events-none absolute bottom-3 left-3 z-[1000] max-w-[calc(50vw-1.5rem)] text-[9px] font-mono text-storm-500 [text-shadow:0_1px_10px_rgba(0,0,0,0.9)]">
+              Preview feed · Not for safety-critical decisions
+            </div>
+
+            <div className="pointer-events-none absolute bottom-3 right-3 z-[1000] max-w-[calc(50vw-1.5rem)] text-right text-[9px] font-mono text-storm-500 [text-shadow:0_1px_10px_rgba(0,0,0,0.9)]">
+              Leaflet | OpenStreetMap contributors
             </div>
           </div>
 

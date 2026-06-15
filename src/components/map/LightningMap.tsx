@@ -23,7 +23,11 @@ import type {
 } from '@/services/lightning/types';
 import { haversineKm } from '@/services/lightning/geo';
 
-const ML_PREDICTION_URL = import.meta.env.VITE_ML_URL ?? 'http://localhost:5000/ml/predict';
+const configuredMlUrl = import.meta.env.VITE_ML_URL?.trim();
+const ML_PREDICTION_URL = configuredMlUrl && configuredMlUrl.length > 0
+  ? configuredMlUrl
+  : (import.meta.env.PROD ? null : 'http://localhost:5000/ml/predict');
+const ML_PREDICTION_ENABLED = ML_PREDICTION_URL !== null;
 const ML_POLL_INTERVAL_MS = 60_000;
 const PREDICTION_STROKE = '#b56cff';
 const CLUSTER_STROKE = '#ff9f43';
@@ -365,8 +369,8 @@ function strikeVisuals(strike: LightningStrike, isNewest: boolean, monitored: Mo
   const intensityFactor = Math.min(Math.max(strike.intensityKa, 0), 120) / 120;
   const radius = 6 + intensityFactor * 4;
 
-  // Requested mapping: <=120s is fresh (yellow), >120s is aging (red).
-  const color = ageSec <= 120 ? '#ffe033' : '#ff3333';
+  // Safety-first mapping: fresh strikes are hot (red), aging strikes cool down.
+  const color = ageSec <= 120 ? '#ff3333' : '#8aa0c8';
   const opacity = isNewest ? 0.85 : 0.8;
 
   return { radius, color, opacity, dist };
@@ -403,6 +407,11 @@ export function LightningMap({
   const [prediction, setPrediction] = useState<PredictionOverlayData | null>(null);
 
   useEffect(() => {
+    if (!ML_PREDICTION_ENABLED || !ML_PREDICTION_URL) {
+      setPrediction(null);
+      return;
+    }
+
     let cancelled = false;
 
     const loadPrediction = async () => {
@@ -443,11 +452,19 @@ export function LightningMap({
       className="w-full h-full"
       zoomControl
     >
-      {/* Dark base map - CartoDB Dark Matter */}
+      {/* Dark base map and a separate labels pane for clearer label legibility */}
       <TileLayer
         attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> &copy; <a href="https://carto.com/attributions">CARTO</a>'
-        url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+        url="https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}{r}.png"
       />
+
+      <Pane name="map-labels" style={{ zIndex: 325 }}>
+        <TileLayer
+          url="https://{s}.basemaps.cartocdn.com/dark_only_labels/{z}/{x}/{y}{r}.png"
+          pane="map-labels"
+          opacity={0.95}
+        />
+      </Pane>
 
       {/* Live NEXRAD radar WMS overlay above base map and below strike layers */}
       <Pane name="radar-overlay" style={{ zIndex: 320 }}>
@@ -458,10 +475,10 @@ export function LightningMap({
       <MapClickCapture onMoveMonitoredLocation={onMoveMonitoredLocation} />
 
       {/* Animated strike trail showing storm motion */}
-      <StrikeTrail strikes={strikes} />
+      {ML_PREDICTION_ENABLED && <StrikeTrail strikes={strikes} />}
 
       {/* Storm cell + predicted zone overlay from ML */}
-      {prediction && <StormCellOverlay prediction={prediction} />}
+      {ML_PREDICTION_ENABLED && prediction && <StormCellOverlay prediction={prediction} />}
 
       {/* Safety radius rings (largest first so smaller ones render on top) */}
       {RADIUS_RINGS.slice().reverse().map(({ key, color }) => {

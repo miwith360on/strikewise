@@ -121,7 +121,7 @@ export default function LandingPage() {
       </header>
 
       {/* Hero */}
-      <main className="relative z-10 flex-1 flex flex-col items-center justify-center px-6 text-center gap-8 py-12">
+      <main className="relative z-10 flex-1 flex flex-col items-center justify-center px-6 pt-[env(safe-area-inset-top)] text-center gap-8 py-12">
         <HeroBolt />
 
         <div className="space-y-4 max-w-sm">

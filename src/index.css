@@ -53,6 +53,10 @@ html, body, #root {
   color: #4a5680 !important;
 }
 
+.leaflet-pane.map-labels-pane img.leaflet-tile {
+  filter: drop-shadow(0 0 1px rgba(0, 0, 0, 0.95)) drop-shadow(0 0 4px rgba(0, 0, 0, 0.75));
+}
+
 .leaflet-control-zoom {
   border: 1px solid rgba(255, 255, 255, 0.1) !important;
   border-radius: 8px !important;
