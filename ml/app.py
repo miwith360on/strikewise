@@ -16,13 +16,18 @@ from sklearn.linear_model import LinearRegression
 APP_DIR = os.path.dirname(__file__)
 DB_PATH = os.getenv("ML_DB_PATH", os.path.join(APP_DIR, "strikewise_ml.db"))
 LIGHTNING_API_URL = os.getenv("LIGHTNING_API_URL", "http://localhost:3000/api/lightning?minutes=30")
-POLL_INTERVAL_SECONDS = int(os.getenv("ML_POLL_INTERVAL_SECONDS", "60"))
+POLL_MIN_SECONDS = int(os.getenv("ML_POLL_MIN_SECONDS", "30"))
+POLL_MAX_SECONDS = int(os.getenv("ML_POLL_MAX_SECONDS", "300"))
 PREDICTION_MINUTES = int(os.getenv("ML_PREDICTION_MINUTES", "15"))
 CLUSTER_WINDOW_MINUTES = int(os.getenv("ML_CLUSTER_WINDOW_MINUTES", "45"))
 DBSCAN_EPS_KM = float(os.getenv("ML_DBSCAN_EPS_KM", "20"))
 MIN_CLUSTER_POINTS = int(os.getenv("ML_MIN_CLUSTER_POINTS", "4"))
 MIN_BUCKETS_FOR_PREDICTION = int(os.getenv("ML_MIN_BUCKETS_FOR_PREDICTION", "3"))
 REQUEST_TIMEOUT_SECONDS = int(os.getenv("ML_REQUEST_TIMEOUT_SECONDS", "20"))
+RECENT_STRIKE_WINDOW_MINUTES = 10
+
+POLL_MIN_SECONDS = max(1, POLL_MIN_SECONDS)
+POLL_MAX_SECONDS = max(POLL_MIN_SECONDS, POLL_MAX_SECONDS)
 
 logger = logging.getLogger("strikewise-ml")
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
@@ -121,21 +126,58 @@ def save_strikes(payload: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def count_recent_strikes(payload: dict[str, Any], window_minutes: int = RECENT_STRIKE_WINDOW_MINUTES) -> int:
+    strikes = payload.get("strikes", [])
+    if not isinstance(strikes, list):
+        return 0
+
+    cutoff_ms = now_ms() - window_minutes * 60 * 1000
+    recent = 0
+    for strike in strikes:
+        if not isinstance(strike, dict):
+            continue
+        try:
+            timestamp = int(strike["timestamp"])
+        except (KeyError, TypeError, ValueError):
+            continue
+
+        if timestamp >= cutoff_ms:
+            recent += 1
+
+    return recent
+
+
 def polling_loop(stop_event: threading.Event) -> None:
+    current_interval_seconds = POLL_MIN_SECONDS
+
     while not stop_event.is_set():
         try:
             payload = fetch_lightning_payload()
+            recent_strike_count = count_recent_strikes(payload)
             result = save_strikes(payload)
+
+            if recent_strike_count > 0:
+                current_interval_seconds = POLL_MIN_SECONDS
+                cadence_reason = "active"
+            else:
+                current_interval_seconds = min(POLL_MAX_SECONDS, current_interval_seconds * 2)
+                cadence_reason = "idle-backoff"
+
             logger.info(
-                "Saved %s/%s strikes from %s",
+                "Saved %s/%s strikes from %s (recent10m=%s, nextPoll=%ss, mode=%s)",
                 result["inserted"],
                 result["received"],
                 result["provider"],
+                recent_strike_count,
+                current_interval_seconds,
+                cadence_reason,
             )
         except Exception as error:  # noqa: BLE001
             logger.exception("Lightning ingestion failed: %s", error)
+            logger.info("Next poll in %ss", current_interval_seconds)
 
-        stop_event.wait(POLL_INTERVAL_SECONDS)
+        if stop_event.wait(current_interval_seconds):
+            break
 
 
 def load_recent_samples(window_minutes: int) -> list[sqlite3.Row]:
@@ -303,7 +345,8 @@ def get_status() -> dict[str, Any]:
     return {
         "lightningApiUrl": LIGHTNING_API_URL,
         "dbPath": DB_PATH,
-        "pollIntervalSeconds": POLL_INTERVAL_SECONDS,
+        "pollMinSeconds": POLL_MIN_SECONDS,
+        "pollMaxSeconds": POLL_MAX_SECONDS,
         "predictionMinutes": PREDICTION_MINUTES,
         "totalRows": int(summary["total_rows"] or 0),
         "distinctStrikes": int(summary["distinct_strikes"] or 0),
