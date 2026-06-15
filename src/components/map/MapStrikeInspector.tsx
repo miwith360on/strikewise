@@ -78,7 +78,7 @@ export function MapStrikeInspector({ strike, monitored, onClose }: MapStrikeInsp
         </div>
         <button
           onClick={onClose}
-          className="text-storm-500 hover:text-storm-200 transition-colors text-lg leading-none"
+          className="rounded-md text-storm-500 hover:text-storm-200 transition-colors text-lg leading-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-bolt-500 focus-visible:ring-offset-2 focus-visible:ring-offset-storm-950"
           aria-label="Close strike inspector"
         >
           ×

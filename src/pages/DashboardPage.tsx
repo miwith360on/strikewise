@@ -123,7 +123,7 @@ function AreaRiskBanner({ status }: { status: SafetyStatus }) {
   const distanceLabel = status.closestStrikeKm >= 999 ? 'Unknown' : `${status.closestStrikeKm} km`;
 
   return (
-    <div className="absolute top-16 left-1/2 z-[1200] w-[min(30rem,calc(100%-1.5rem))] -translate-x-1/2 pointer-events-none">
+    <div className="pointer-events-none px-3 pt-3">
       <div className={`rounded-xl border px-4 py-3 shadow-danger backdrop-blur-sm ${isDanger ? 'bg-red-950/90 border-red-400 text-red-100' : 'bg-yellow-300/95 border-yellow-100 text-zinc-950'}`}>
         <div className="flex items-center justify-between gap-3">
           <div>
@@ -291,9 +291,31 @@ export default function DashboardPage() {
     ? `${feedMeta.closestStrikeKm.toFixed(1)} km`
     : 'none';
   const resultStateLabel = feedMeta?.resultState ?? (strikes.length > 0 ? 'active' : 'empty');
+  const feedDiagnostics = (
+    <div className="glass-card w-full max-w-full rounded-xl border border-storm-600 px-3 py-2 shadow-card">
+      <div className="text-[10px] font-mono uppercase tracking-widest text-storm-400">
+        Feed Diagnostics
+      </div>
+      <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 text-[10px] font-mono">
+        <span className="text-storm-500">provider</span>
+        <span className="min-w-0 justify-self-end break-words text-right text-storm-200">{providerName}</span>
+
+        <span className="text-storm-500">state</span>
+        <span className="min-w-0 justify-self-end break-words text-right uppercase text-storm-200">{resultStateLabel}</span>
+
+        <span className="text-storm-500">closest strike</span>
+        <span className="min-w-0 justify-self-end break-words text-right text-bolt-400">{closestStrikeLabel}</span>
+
+        <span className="text-storm-500">monitored</span>
+        <span className="min-w-0 justify-self-end break-words text-right text-storm-300">
+          {formatCoordinate(alertConfig.monitored.lat, 'N', 'S')} {formatCoordinate(alertConfig.monitored.lng, 'E', 'W')}
+        </span>
+      </div>
+    </div>
+  );
 
   return (
-    <div className="flex flex-col h-screen bg-storm-950 overflow-hidden">
+    <div className="flex min-h-screen flex-col overflow-x-hidden bg-storm-950">
       {/* Sticky header */}
       <Header
         location={alertConfig.monitored}
@@ -323,107 +345,95 @@ export default function DashboardPage() {
       ))}
 
       {/* Main layout: map + sidebar panels */}
-      <div className="flex flex-col lg:flex-row flex-1 overflow-hidden bg-storm-950">
-        {/* ── Lightning Map (dominant panel) ─────────────────────── */}
-        <div className="relative flex-shrink-0 h-[50vh] lg:h-full lg:flex-1 bg-storm-950">
+      <div className="flex flex-1 flex-col bg-storm-950 lg:min-h-0 lg:flex-row lg:overflow-hidden">
+        <div className="flex min-h-0 flex-1 flex-col overflow-y-auto lg:overflow-hidden">
           <AreaRiskBanner status={effectiveSafetyStatus} />
 
-          <LightningMap
-            strikes={strikes}
-            monitored={alertConfig.monitored}
-            alertConfig={alertConfig}
-            newestStrikeId={newestStrikeId}
-            selectedStrikeId={selectedStrikeId}
-            onSelectStrike={(strike) => setSelectedStrikeId(strike.id)}
-            onMoveMonitoredLocation={({ lat, lng }) => {
-              setManualLocation(lat, lng, 'Pinned Location');
-            }}
-          />
+          <div className="relative h-[44vh] min-h-[18rem] max-w-full flex-shrink-0 bg-storm-950 lg:h-auto lg:min-h-0 lg:flex-1">
+            <LightningMap
+              strikes={strikes}
+              monitored={alertConfig.monitored}
+              alertConfig={alertConfig}
+              newestStrikeId={newestStrikeId}
+              selectedStrikeId={selectedStrikeId}
+              onSelectStrike={(strike) => setSelectedStrikeId(strike.id)}
+              onMoveMonitoredLocation={({ lat, lng }) => {
+                setManualLocation(lat, lng, 'Pinned Location');
+              }}
+            />
 
-          {/* Map overlay: strike counter badge */}
-          <div className="absolute top-3 right-3 z-[1000] glass-card border border-storm-600 px-3 py-1.5 rounded-xl flex items-center gap-2 shadow-card pointer-events-none">
-            <span className="text-bolt-500 font-mono font-bold text-sm tabular-nums">
-              {effectiveSafetyStatus.strikeCountLast10min}
-            </span>
-            <span className="text-[10px] font-mono uppercase tracking-widest text-storm-400">
-              active / 10 min
-            </span>
-          </div>
-
-          <div className="absolute top-3 left-3 z-[1000] glass-card border border-storm-600 px-3 py-2 rounded-xl shadow-card pointer-events-none">
-            <div className="flex items-center gap-2 text-[10px] font-mono uppercase tracking-widest text-storm-300">
-              <span className="w-2 h-2 rounded-full bg-plasma-500" /> monitored point
-            </div>
-            <div className="mt-2 flex items-center gap-3 text-[10px] font-mono text-storm-400">
-              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-bolt-500" /> fresh strike</span>
-              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-[#ff3333]" /> aging strike</span>
-            </div>
-          </div>
-
-          <div className="absolute bottom-12 left-3 z-[1000] w-[min(24rem,calc(100%-1.5rem))] glass-card border border-storm-600 px-3 py-2 rounded-xl shadow-card pointer-events-none">
-            <div className="text-[10px] font-mono uppercase tracking-widest text-storm-400">
-              Feed Diagnostics
-            </div>
-            <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 text-[10px] font-mono">
-              <span className="text-storm-500">provider</span>
-              <span className="text-storm-200 justify-self-end">{providerName}</span>
-
-              <span className="text-storm-500">state</span>
-              <span className="text-storm-200 uppercase justify-self-end">{resultStateLabel}</span>
-
-              <span className="text-storm-500">closest strike</span>
-              <span className="text-bolt-400 justify-self-end">{closestStrikeLabel}</span>
-
-              <span className="text-storm-500">monitored</span>
-              <span className="text-storm-300 justify-self-end">
-                {formatCoordinate(alertConfig.monitored.lat, 'N', 'S')} {formatCoordinate(alertConfig.monitored.lng, 'E', 'W')}
+            <div className="pointer-events-none absolute top-3 right-3 z-[1000] flex items-center gap-2 rounded-xl border border-storm-600 px-3 py-1.5 shadow-card glass-card max-w-[calc(100vw-1.5rem)]">
+              <span className="text-bolt-500 font-mono font-bold text-sm tabular-nums">
+                {effectiveSafetyStatus.strikeCountLast10min}
+              </span>
+              <span className="text-[10px] font-mono uppercase tracking-widest text-storm-400">
+                active / 10 min
               </span>
             </div>
+
+            <div className="pointer-events-none absolute left-3 top-3 z-[1000] max-w-[calc(100vw-1.5rem)] rounded-xl border border-storm-600 px-3 py-2 shadow-card glass-card">
+              <div className="flex items-center gap-2 text-[10px] font-mono uppercase tracking-widest text-storm-300">
+                <span className="h-2 w-2 rounded-full bg-plasma-500" /> monitored point
+              </div>
+              <div className="mt-2 flex max-w-full flex-wrap items-center gap-x-3 gap-y-1 text-[10px] font-mono text-storm-400">
+                <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-bolt-500" /> fresh strike</span>
+                <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-[#ff3333]" /> aging strike</span>
+              </div>
+            </div>
+
+            <div className="pointer-events-none absolute inset-x-3 bottom-3 z-[1000] flex max-w-[calc(100vw-1.5rem)] flex-col gap-1 text-[9px] font-mono text-storm-600 lg:max-w-[calc(100%-1.5rem)]">
+              <div>Preview feed · Not for safety-critical decisions</div>
+              <div>Leaflet | OpenStreetMap contributors</div>
+            </div>
           </div>
 
-          <div className="absolute bottom-12 right-3 z-[1000] w-[min(22rem,calc(100%-1.5rem))]">
+          <div className="flex flex-col gap-3 p-3 lg:hidden">
             <MapStrikeInspector
               strike={selectedStrike}
               monitored={alertConfig.monitored}
               onClose={() => setSelectedStrikeId(null)}
             />
-          </div>
 
-          {/* Map overlay: data attribution note */}
-          <div className="absolute bottom-8 left-3 z-[1000] text-[9px] font-mono text-storm-600 pointer-events-none">
-            Preview feed · Not for safety-critical decisions
+            <ThunderETAPanel etas={thunderETAs} />
+
+            <SafetyRadiusPanel status={effectiveSafetyStatus} alertConfig={alertConfig} regionalAlertText={regionalAlertText} />
+
+            <StrikeStatsPanel strikes={strikes} isLive={isLive} feedStatus={feedStatus} feedMeta={feedMeta} />
+
+            {feedDiagnostics}
           </div>
         </div>
 
-        {/* ── Side panel ──────────────────────────────────────────── */}
-        <aside className="flex-shrink-0 lg:w-80 xl:w-96 overflow-y-auto bg-storm-950 border-t lg:border-t-0 lg:border-l border-storm-700 p-3 space-y-4">
+        <aside className="hidden flex-shrink-0 overflow-y-auto border-storm-700 bg-storm-950 p-3 lg:block lg:w-80 lg:border-l xl:w-96">
+          <div className="space-y-4">
+            <MapStrikeInspector
+              strike={selectedStrike}
+              monitored={alertConfig.monitored}
+              onClose={() => setSelectedStrikeId(null)}
+            />
 
-          {/* Safety status */}
-          <CollapsibleSection title="Safety Status" defaultOpen>
-            <SafetyRadiusPanel status={effectiveSafetyStatus} alertConfig={alertConfig} regionalAlertText={regionalAlertText} />
-          </CollapsibleSection>
+            <CollapsibleSection title="Safety Status" defaultOpen>
+              <SafetyRadiusPanel status={effectiveSafetyStatus} alertConfig={alertConfig} regionalAlertText={regionalAlertText} />
+            </CollapsibleSection>
 
-          {/* Thunder ETA */}
-          <CollapsibleSection title="Thunder ETA" defaultOpen>
-            <ThunderETAPanel etas={thunderETAs} />
-          </CollapsibleSection>
+            <CollapsibleSection title="Thunder ETA" defaultOpen>
+              <ThunderETAPanel etas={thunderETAs} />
+            </CollapsibleSection>
 
-          {/* Strike feed */}
-          <CollapsibleSection title="Strike Feed" defaultOpen={false}>
-            <StrikeStatsPanel strikes={strikes} isLive={isLive} feedStatus={feedStatus} feedMeta={feedMeta} />
-          </CollapsibleSection>
+            <CollapsibleSection title="Strike Feed" defaultOpen={false}>
+              <StrikeStatsPanel strikes={strikes} isLive={isLive} feedStatus={feedStatus} feedMeta={feedMeta} />
+            </CollapsibleSection>
 
-          {/* Alert config */}
-          <CollapsibleSection
-            title="Alert Configuration"
-            icon={<BellIcon className="w-3 h-3" />}
-            defaultOpen={false}
-          >
-            <AlertConfigPanel config={alertConfig} onSave={setAlertConfig} />
-          </CollapsibleSection>
+            {feedDiagnostics}
 
-          {/* Bottom spacer for mobile scroll */}
-          <div className="h-4 lg:hidden" />
+            <CollapsibleSection
+              title="Alert Configuration"
+              icon={<BellIcon className="w-3 h-3" />}
+              defaultOpen={false}
+            >
+              <AlertConfigPanel config={alertConfig} onSave={setAlertConfig} />
+            </CollapsibleSection>
+          </div>
         </aside>
       </div>
     </div>
