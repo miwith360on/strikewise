@@ -9,6 +9,7 @@ import type {
 import { haversineKm } from './geo';
 
 export const SOUND_SPEED_KM_S = 0.343;
+export const MAX_AUDIBLE_KM = 16;
 export const ACTIVE_WINDOW_MINUTES = 10;
 export const ALL_CLEAR_WINDOW_MINUTES = 30;
 export const ACTIVE_WINDOW_MS = ACTIVE_WINDOW_MINUTES * 60 * 1000;
@@ -86,7 +87,7 @@ export function buildThunderETAs(location: LatLng, strikes: LightningStrike[]): 
         lng: strike.lng,
       };
     })
-    .filter((entry) => entry.etaSeconds > -5)
+    .filter((entry) => entry.distanceKm <= MAX_AUDIBLE_KM && entry.etaSeconds > -5)
     .sort((left, right) => left.etaSeconds - right.etaSeconds)
     .slice(0, 5);
 }

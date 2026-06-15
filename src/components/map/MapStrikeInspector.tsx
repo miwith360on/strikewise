@@ -1,6 +1,7 @@
 import type { LightningStrike, MonitoredLocation } from '@/services/lightning/types';
 import { haversineKm } from '@/services/lightning/geo';
 import { BoltIcon, ClockIcon, LocationIcon } from '@/components/ui/Icons';
+import { MAX_AUDIBLE_KM } from '@/services/lightning/insights';
 
 const SOUND_SPEED_KM_S = 0.343;
 
@@ -31,6 +32,8 @@ function formatAge(timestamp: number) {
 }
 
 function formatETA(distanceKm: number, timestamp: number) {
+  if (distanceKm > MAX_AUDIBLE_KM) return 'Too far to hear';
+
   const ageAtLocationSec = (Date.now() - timestamp) / 1000;
   const etaSeconds = distanceKm / SOUND_SPEED_KM_S - ageAtLocationSec;
 
