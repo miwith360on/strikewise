@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "tsx watch src/index.ts",
+    "test": "tsx --test src/**/*.test.ts",
     "build:web": "npm --prefix .. run build",
     "build:server": "tsc -p tsconfig.json",
     "build": "npm run build:web && npm run build:server",
