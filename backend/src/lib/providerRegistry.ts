@@ -28,6 +28,20 @@ export interface ProviderHealth {
   lastSuccessAt: number | null;
   totalRequests: number;
   totalErrors: number;
+  lastLatencyMs: number | null;
+  avgLatencyMs: number | null;
+}
+
+export interface RegistryDiagnostics {
+  startedAt: number;
+  uptimeSec: number;
+  totalRequests: number;
+  totalFailures: number;
+  totalFailovers: number;
+  lastFailoverAt: number | null;
+  lastFailoverFrom: string | null;
+  lastFailoverTo: string | null;
+  lastFailoverReason: string | null;
 }
 
 interface ProviderEntry {
@@ -39,6 +53,8 @@ interface ProviderEntry {
   lastSuccessAt: number | null;
   totalRequests: number;
   totalErrors: number;
+  lastLatencyMs: number | null;
+  totalLatencyMs: number;
 }
 
 function shouldFailoverFromResult(result: LightningResponse): string | null {
@@ -72,6 +88,14 @@ function withTimeout<T>(promise: Promise<T>, ms: number, name: string): Promise<
 export class ProviderRegistry {
   private readonly entries: ProviderEntry[];
   private activeIndex = 0;
+  private readonly startedAt = Date.now();
+  private totalRequests = 0;
+  private totalFailures = 0;
+  private totalFailovers = 0;
+  private lastFailoverAt: number | null = null;
+  private lastFailoverFrom: string | null = null;
+  private lastFailoverTo: string | null = null;
+  private lastFailoverReason: string | null = null;
 
   constructor(providers: { name: string; provider: LightningProvider }[]) {
     this.entries = providers.map((p) => ({
@@ -82,10 +106,15 @@ export class ProviderRegistry {
       lastSuccessAt: null,
       totalRequests: 0,
       totalErrors: 0,
+      lastLatencyMs: null,
+      totalLatencyMs: 0,
     }));
   }
 
   async getRecentStrikes(query: LightningQuery): Promise<LightningResponse> {
+    this.totalRequests++;
+    const attemptErrors: string[] = [];
+
     // Try each provider in order, starting from the current active one
     for (let attempt = 0; attempt < this.entries.length; attempt++) {
       const idx = (this.activeIndex + attempt) % this.entries.length;
@@ -97,6 +126,7 @@ export class ProviderRegistry {
       }
 
       entry.totalRequests++;
+      const attemptStartedAt = Date.now();
       try {
         const result = await withTimeout(
           entry.provider.getRecentStrikes(query),
@@ -104,9 +134,21 @@ export class ProviderRegistry {
           entry.name,
         );
 
+        const latencyMs = Date.now() - attemptStartedAt;
+        entry.lastLatencyMs = latencyMs;
+        entry.totalLatencyMs += latencyMs;
+
         const failoverReason = shouldFailoverFromResult(result);
         if (failoverReason && attempt < this.entries.length - 1) {
           throw new Error(failoverReason);
+        }
+
+        if (attempt > 0) {
+          this.totalFailovers++;
+          this.lastFailoverAt = Date.now();
+          this.lastFailoverFrom = this.entries[this.activeIndex]?.name ?? null;
+          this.lastFailoverTo = entry.name;
+          this.lastFailoverReason = attemptErrors.join(' | ') || 'Primary unavailable';
         }
 
         // Success: reset consecutive error count, promote to active
@@ -127,8 +169,13 @@ export class ProviderRegistry {
       } catch (err) {
         entry.errorCount++;
         entry.totalErrors++;
+        this.totalFailures++;
+        const latencyMs = Date.now() - attemptStartedAt;
+        entry.lastLatencyMs = latencyMs;
+        entry.totalLatencyMs += latencyMs;
         entry.lastError = err instanceof Error ? err.message : 'Unknown error';
         entry.lastErrorAt = Date.now();
+        attemptErrors.push(`${entry.name}: ${entry.lastError}`);
       }
     }
 
@@ -157,7 +204,25 @@ export class ProviderRegistry {
       lastSuccessAt: entry.lastSuccessAt,
       totalRequests: entry.totalRequests,
       totalErrors: entry.totalErrors,
+      lastLatencyMs: entry.lastLatencyMs,
+      avgLatencyMs: entry.totalRequests > 0
+        ? Math.round((entry.totalLatencyMs / entry.totalRequests) * 10) / 10
+        : null,
     }));
+  }
+
+  getDiagnostics(): RegistryDiagnostics {
+    return {
+      startedAt: this.startedAt,
+      uptimeSec: Math.max(0, Math.round((Date.now() - this.startedAt) / 1000)),
+      totalRequests: this.totalRequests,
+      totalFailures: this.totalFailures,
+      totalFailovers: this.totalFailovers,
+      lastFailoverAt: this.lastFailoverAt,
+      lastFailoverFrom: this.lastFailoverFrom,
+      lastFailoverTo: this.lastFailoverTo,
+      lastFailoverReason: this.lastFailoverReason,
+    };
   }
 
   getActiveName(): string {

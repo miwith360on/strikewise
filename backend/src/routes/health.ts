@@ -6,6 +6,7 @@ export const healthRouter = Router();
 
 healthRouter.get('/', (_request, response) => {
   const providerHealth = providerRegistry.getHealth();
+  const diagnostics = providerRegistry.getDiagnostics();
   const activeProvider = providerRegistry.getActiveName();
   const anyDegraded = providerHealth.some((p) => p.errorCount > 0);
   const allDegraded = providerHealth.every((p) => !p.active && p.errorCount > 0);
@@ -28,6 +29,7 @@ healthRouter.get('/', (_request, response) => {
     dataAgeSec,
     lastSuccessAt,
     providers: providerHealth,
+    diagnostics,
     timestamp: Date.now(),
   });
 });
