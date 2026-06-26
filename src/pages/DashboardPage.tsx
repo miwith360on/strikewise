@@ -110,6 +110,40 @@ function applyLocationConfidenceOverride(
   };
 }
 
+function DataConfidenceBanner({
+  gpsError,
+  feedMeta,
+}: {
+  gpsError: string | null;
+  feedMeta: { simulated?: boolean; providerStatus?: string; cached?: boolean; cacheAgeSeconds?: number | null } | null;
+}) {
+  const notes: string[] = [];
+
+  if (gpsError) {
+    notes.push('Location permission failed. Data may not match your exact area until you pin your location.');
+  }
+  if (feedMeta?.simulated) {
+    notes.push('Feed is currently modeled/estimated, not direct observed strike telemetry.');
+  }
+  if (feedMeta?.providerStatus === 'degraded') {
+    notes.push('Primary live provider is degraded. Fallback source is being used.');
+  }
+  if (feedMeta?.cached) {
+    notes.push(`Showing cached data from ${feedMeta.cacheAgeSeconds ?? 0}s ago.`);
+  }
+
+  if (notes.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="px-4 py-2 text-[11px] font-mono border-b border-yellow-500/30 bg-yellow-950/40 text-yellow-100">
+      <span className="mr-2 font-bold uppercase tracking-wider text-[10px]">Data confidence</span>
+      {notes.join(' ')}
+    </div>
+  );
+}
+
 function AreaRiskBanner({ status }: { status: SafetyStatus }) {
   if (status.level !== 'warning' && status.level !== 'danger') {
     return null;
@@ -326,6 +360,8 @@ export default function DashboardPage() {
         onRequestGPS={requestGPS}
         gpsLoading={gpsLoading}
       />
+
+      <DataConfidenceBanner gpsError={gpsError} feedMeta={feedMeta} />
 
       {gpsError && (
         <div className="px-4 py-2 text-[11px] font-mono border-b border-strike-warning/40 bg-orange-950/50 text-orange-200">

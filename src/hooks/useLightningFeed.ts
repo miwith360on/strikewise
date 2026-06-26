@@ -62,6 +62,48 @@ function getBoundsForLocation(location: MonitoredLocation): MapBounds {
   };
 }
 
+function formatProviderLabel(meta: LightningFeedMeta | null): string | null {
+  if (!meta?.provider) return null;
+  return meta.provider.charAt(0).toUpperCase() + meta.provider.slice(1);
+}
+
+function buildFeedMessage(meta: LightningFeedMeta | null, queryWindowMinutes: number): string {
+  const providerLabel = formatProviderLabel(meta);
+  const prefix = providerLabel ? `${providerLabel} · ` : '';
+
+  if (!meta) {
+    return 'Live lightning feed';
+  }
+
+  if (meta.resultState === 'stale' && meta.freshnessSeconds !== null && meta.freshnessSeconds !== undefined) {
+    return `${prefix}Feed delayed by ${Math.ceil(meta.freshnessSeconds / 60)} min`;
+  }
+
+  if (meta.resultState === 'empty') {
+    if (meta.simulated) {
+      return `${prefix}No nearby modeled lightning in the last ${queryWindowMinutes} min`;
+    }
+    if (meta.providerStatus === 'degraded') {
+      return `${prefix}Limited live coverage right now; no nearby strikes in ${queryWindowMinutes} min`;
+    }
+    return `${prefix}No nearby strikes in the last ${queryWindowMinutes} min`;
+  }
+
+  if (meta.cached) {
+    return `${prefix}cached ${meta.cacheAgeSeconds ?? 0}s ago`;
+  }
+
+  if (meta.simulated) {
+    return `${prefix}Modeled lightning estimate`;
+  }
+
+  if (meta.providerStatus === 'degraded') {
+    return `${prefix}Live feed in degraded mode`;
+  }
+
+  return `${prefix}Live feed`;
+}
+
 export function useLightningFeed(): LightningFeedState {
   const [strikes, setStrikes] = useState<LightningStrike[]>([]);
   const [alertConfig, setAlertConfigState] = useState<AlertConfig>(DEFAULT_CONFIG);
@@ -103,39 +145,19 @@ export function useLightningFeed(): LightningFeedState {
         setStrikes(initial);
         const latestMeta = lightningService.getLatestMeta();
         setFeedMeta(latestMeta);
-        const providerLabel = latestMeta?.provider
-          ? latestMeta.provider.charAt(0).toUpperCase() + latestMeta.provider.slice(1)
-          : null;
         if (lightningServiceMode === 'live') {
           setIsLive(true);
           setFeedStatus('live');
-          if (latestMeta?.resultState === 'stale' && latestMeta.freshnessSeconds !== null) {
-            setFeedMessage(`Feed delayed by ${Math.ceil((latestMeta.freshnessSeconds ?? 0) / 60)} min`);
-          } else if (latestMeta?.resultState === 'empty') {
-            setFeedMessage(`${providerLabel ? `${providerLabel} · ` : ''}No nearby strikes in the last ${QUERY_WINDOW_MINUTES} min`);
-          } else if (latestMeta?.cached) {
-            setFeedMessage(`${providerLabel ? `${providerLabel} · ` : ''}cached ${latestMeta.cacheAgeSeconds ?? 0}s ago`);
-          } else {
-            setFeedMessage(providerLabel ? `${providerLabel} · Live feed` : 'Live lightning feed');
-          }
+          setFeedMessage(buildFeedMessage(latestMeta, QUERY_WINDOW_MINUTES));
         }
 
         unsub = lightningService.subscribeToLiveStrikes(bounds, QUERY_WINDOW_MINUTES, (strike) => {
           const currentMeta = lightningService.getLatestMeta();
           setFeedMeta(currentMeta);
-          const providerLabel = currentMeta?.provider
-            ? currentMeta.provider.charAt(0).toUpperCase() + currentMeta.provider.slice(1)
-            : null;
           if (lightningServiceMode === 'live') {
             setIsLive(true);
             setFeedStatus('live');
-            if (currentMeta?.resultState === 'stale' && currentMeta.freshnessSeconds !== null) {
-              setFeedMessage(`Feed delayed by ${Math.ceil((currentMeta.freshnessSeconds ?? 0) / 60)} min`);
-            } else if (currentMeta?.cached) {
-              setFeedMessage(`${providerLabel ? `${providerLabel} · ` : ''}cached ${currentMeta.cacheAgeSeconds ?? 0}s ago`);
-            } else {
-              setFeedMessage(providerLabel ? `${providerLabel} · Live feed` : 'Live lightning feed');
-            }
+            setFeedMessage(buildFeedMessage(currentMeta, QUERY_WINDOW_MINUTES));
           }
 
           setStrikes((prev) => {
