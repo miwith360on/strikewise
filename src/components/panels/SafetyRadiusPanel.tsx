@@ -7,6 +7,7 @@ interface SafetyRadiusPanelProps {
   status: SafetyStatus;
   alertConfig: AlertConfig;
   regionalAlertText?: string | null;
+  riskDriver?: string | null;
 }
 
 const levelMeta = {
@@ -72,7 +73,12 @@ function RadiusBar({
   );
 }
 
-export function SafetyRadiusPanel({ status, alertConfig, regionalAlertText = null }: SafetyRadiusPanelProps) {
+export function SafetyRadiusPanel({
+  status,
+  alertConfig,
+  regionalAlertText = null,
+  riskDriver = null,
+}: SafetyRadiusPanelProps) {
   const meta = levelMeta[status.level];
 
   // Bars fill from outer in: caution, warning, danger
@@ -122,6 +128,13 @@ export function SafetyRadiusPanel({ status, alertConfig, regionalAlertText = nul
             {status.closestStrikeKm >= 999 ? '—' : `${status.closestStrikeKm} km`}
           </span>
         </div>
+
+        {riskDriver && (
+          <div className="flex items-center justify-between border-t border-storm-700 pt-3">
+            <span className="text-xs text-storm-400 font-mono uppercase tracking-wider">Risk driver</span>
+            <span className="max-w-[60%] text-right text-[11px] font-mono text-storm-200">{riskDriver}</span>
+          </div>
+        )}
 
         {/* Stats row */}
         <div className="flex justify-between text-center border-t border-storm-700 pt-3">

@@ -10,8 +10,12 @@ import { AlertConfigPanel } from '@/components/panels/AlertConfigPanel';
 import { StrikeStatsPanel } from '@/components/panels/StrikeStatsPanel';
 import { Header } from '@/components/layout/Header';
 import { BellIcon, ChevronDownIcon } from '@/components/ui/Icons';
-import type { LightningStrike, SafetyStatus } from '@/services/lightning/types';
+import type { AlertConfig, LightningStrike, SafetyStatus } from '@/services/lightning/types';
 import type { NwsAlert } from '@/hooks/useNwsAlerts';
+
+const MAX_DANGER_RADIUS_KM = 20;
+const MAX_WARNING_RADIUS_KM = 40;
+const MAX_CAUTION_RADIUS_KM = 80;
 
 function formatCoordinate(value: number, positiveLabel: string, negativeLabel: string) {
   const abs = Math.abs(value).toFixed(4);
@@ -107,6 +111,41 @@ function applyLocationConfidenceOverride(
     level: 'caution',
     colorHex: levelColor('caution'),
     recommendation: 'Location access failed, so safety is uncertain. Allow location or pin your position on the map.',
+  };
+}
+
+function deriveRiskDriver(
+  baseStatus: SafetyStatus,
+  effectiveStatus: SafetyStatus,
+  alerts: NwsAlert[],
+  gpsError: string | null,
+): string {
+  const regionalEscalation = minimumLevelFromNwsAlerts(alerts);
+  if (SAFETY_LEVEL_RANK[regionalEscalation] > SAFETY_LEVEL_RANK[baseStatus.level]) {
+    return 'Regional NWS severe alert';
+  }
+
+  if (gpsError && SAFETY_LEVEL_RANK[effectiveStatus.level] >= SAFETY_LEVEL_RANK.caution) {
+    return 'Location confidence fallback';
+  }
+
+  if (effectiveStatus.strikeCountLast10min > 0 || effectiveStatus.closestStrikeKm < 999) {
+    return 'Nearby strike telemetry';
+  }
+
+  return 'No nearby strikes detected';
+}
+
+function expandRadiusConfig(config: AlertConfig): AlertConfig {
+  const danger = Math.min(MAX_DANGER_RADIUS_KM, config.dangerRadiusKm + 2);
+  const warning = Math.max(danger + 1, Math.min(MAX_WARNING_RADIUS_KM, config.warningRadiusKm + 4));
+  const caution = Math.max(warning + 1, Math.min(MAX_CAUTION_RADIUS_KM, config.cautionRadiusKm + 8));
+
+  return {
+    ...config,
+    dangerRadiusKm: danger,
+    warningRadiusKm: warning,
+    cautionRadiusKm: caution,
   };
 }
 
@@ -311,6 +350,9 @@ export default function DashboardPage() {
     () => strikes.find((strike) => strike.id === selectedStrikeId) ?? null,
     [selectedStrikeId, strikes],
   );
+  const locationConfidence: 'high' | 'low' =
+    gpsError || alertConfig.monitored.id === 'loc-dfw' ? 'low' : 'high';
+
   const effectiveSafetyStatus = useMemo(
     () => applyLocationConfidenceOverride(
       applyRegionalOverride(safetyStatus, nwsAlerts.alerts),
@@ -319,6 +361,17 @@ export default function DashboardPage() {
     ),
     [safetyStatus, nwsAlerts.alerts, alertConfig.monitored.id, gpsError],
   );
+
+  const riskDriver = useMemo(
+    () => deriveRiskDriver(safetyStatus, effectiveSafetyStatus, nwsAlerts.alerts, gpsError),
+    [safetyStatus, effectiveSafetyStatus, nwsAlerts.alerts, gpsError],
+  );
+
+  const canExpandRadius = alertConfig.cautionRadiusKm < MAX_CAUTION_RADIUS_KM;
+
+  const handleExpandRadius = () => {
+    setAlertConfig(expandRadiusConfig(alertConfig));
+  };
 
   const providerName = formatProviderName(feedMeta?.provider);
   const closestStrikeLabel = feedMeta?.closestStrikeKm != null
@@ -357,6 +410,7 @@ export default function DashboardPage() {
         strikeCount={effectiveSafetyStatus.strikeCountLast10min}
         feedStatus={feedStatus}
         feedMessage={feedMessage}
+        locationConfidence={locationConfidence}
         onRequestGPS={requestGPS}
         gpsLoading={gpsLoading}
       />
@@ -435,9 +489,16 @@ export default function DashboardPage() {
 
             <ThunderETAPanel etas={thunderETAs} />
 
-            <SafetyRadiusPanel status={effectiveSafetyStatus} alertConfig={alertConfig} regionalAlertText={regionalAlertText} />
+            <SafetyRadiusPanel status={effectiveSafetyStatus} alertConfig={alertConfig} regionalAlertText={regionalAlertText} riskDriver={riskDriver} />
 
-            <StrikeStatsPanel strikes={strikes} isLive={isLive} feedStatus={feedStatus} feedMeta={feedMeta} />
+            <StrikeStatsPanel
+              strikes={strikes}
+              isLive={isLive}
+              feedStatus={feedStatus}
+              feedMeta={feedMeta}
+              onExpandRadius={handleExpandRadius}
+              canExpandRadius={canExpandRadius}
+            />
 
             {feedDiagnostics}
           </div>
@@ -452,7 +513,7 @@ export default function DashboardPage() {
             />
 
             <CollapsibleSection title="Safety Status" defaultOpen>
-              <SafetyRadiusPanel status={effectiveSafetyStatus} alertConfig={alertConfig} regionalAlertText={regionalAlertText} />
+              <SafetyRadiusPanel status={effectiveSafetyStatus} alertConfig={alertConfig} regionalAlertText={regionalAlertText} riskDriver={riskDriver} />
             </CollapsibleSection>
 
             <CollapsibleSection title="Thunder ETA" defaultOpen>
@@ -460,7 +521,14 @@ export default function DashboardPage() {
             </CollapsibleSection>
 
             <CollapsibleSection title="Strike Feed" defaultOpen={false}>
-              <StrikeStatsPanel strikes={strikes} isLive={isLive} feedStatus={feedStatus} feedMeta={feedMeta} />
+              <StrikeStatsPanel
+                strikes={strikes}
+                isLive={isLive}
+                feedStatus={feedStatus}
+                feedMeta={feedMeta}
+                onExpandRadius={handleExpandRadius}
+                canExpandRadius={canExpandRadius}
+              />
             </CollapsibleSection>
 
             {feedDiagnostics}

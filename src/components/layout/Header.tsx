@@ -10,6 +10,7 @@ interface HeaderProps {
   strikeCount: number;
   feedStatus: FeedStatus;
   feedMessage: string;
+  locationConfidence: 'high' | 'low';
   onRequestGPS: () => void;
   gpsLoading: boolean;
 }
@@ -20,6 +21,7 @@ export function Header({
   strikeCount,
   feedStatus,
   feedMessage,
+  locationConfidence,
   onRequestGPS,
   gpsLoading,
 }: HeaderProps) {
@@ -45,6 +47,16 @@ export function Header({
           <LocationIcon className="w-3 h-3 text-plasma-500" />
           <span className="text-xs font-mono text-storm-200 truncate max-w-[120px]">
             {location.label}
+          </span>
+          <span
+            className={`rounded px-1.5 py-0.5 text-[9px] font-mono uppercase tracking-wider border ${
+              locationConfidence === 'high'
+                ? 'border-strike-safe/40 text-strike-safe bg-strike-safe/10'
+                : 'border-strike-caution/40 text-strike-caution bg-strike-caution/10'
+            }`}
+            title={locationConfidence === 'high' ? 'GPS or pinned location confidence is high' : 'Location confidence is low; verify your monitored point'}
+          >
+            {locationConfidence === 'high' ? 'Precise' : 'Approx'}
           </span>
         </div>
         <div className="flex items-center gap-2">

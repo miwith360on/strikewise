@@ -1,11 +1,14 @@
 import type { FeedStatus, LightningFeedMeta, LightningStrike } from '@/services/lightning/types';
 import { BoltIcon } from '@/components/ui/Icons';
+import { Button } from '@/components/ui/Button';
 
 interface StrikeStatsPanelProps {
   strikes: LightningStrike[];
   isLive: boolean;
   feedStatus: FeedStatus;
   feedMeta?: LightningFeedMeta | null;
+  onExpandRadius?: () => void;
+  canExpandRadius?: boolean;
 }
 
 function timeAgo(ts: number): string {
@@ -31,7 +34,30 @@ function computeStrikeRate(strikes: LightningStrike[], windowMs = 5 * 60 * 1000)
   return { rate, trend, count: recent.length };
 }
 
-export function StrikeStatsPanel({ strikes, isLive, feedStatus, feedMeta }: StrikeStatsPanelProps) {
+function buildEmptyStateMessage(feedStatus: FeedStatus, feedMeta?: LightningFeedMeta | null): string {
+  if (feedStatus === 'unavailable') {
+    return 'Live feed is unavailable right now. Reconnecting automatically.';
+  }
+
+  if (feedMeta?.simulated) {
+    return 'No modeled lightning detected in your current monitored area yet.';
+  }
+
+  if (feedMeta?.providerStatus === 'degraded') {
+    return 'Coverage is limited right now; no strikes detected in this monitored box.';
+  }
+
+  return 'No strikes detected in this monitored box yet.';
+}
+
+export function StrikeStatsPanel({
+  strikes,
+  isLive,
+  feedStatus,
+  feedMeta,
+  onExpandRadius,
+  canExpandRadius = false,
+}: StrikeStatsPanelProps) {
   const sorted = [...strikes].sort((a, b) => b.timestamp - a.timestamp);
   const recent = sorted.slice(0, 5);
   const avgIntensity =
@@ -118,9 +144,18 @@ export function StrikeStatsPanel({ strikes, isLive, feedStatus, feedMeta }: Stri
       {/* Strike feed */}
       <div className="space-y-1">
         {recent.length === 0 && (
-          <p className="text-xs text-storm-500 font-mono text-center py-2">
-            {feedStatus === 'unavailable' ? 'Live feed unavailable' : 'Waiting for data…'}
-          </p>
+          <div className="rounded-lg border border-storm-700 bg-storm-900/40 p-3">
+            <p className="text-xs text-storm-300 font-mono text-center">
+              {buildEmptyStateMessage(feedStatus, feedMeta)}
+            </p>
+            {canExpandRadius && onExpandRadius && (
+              <div className="mt-3 flex justify-center">
+                <Button variant="outline" size="sm" onClick={onExpandRadius}>
+                  Expand Scan Radius
+                </Button>
+              </div>
+            )}
+          </div>
         )}
         {recent.map((s, i) => (
           <div
