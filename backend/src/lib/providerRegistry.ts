@@ -41,6 +41,21 @@ interface ProviderEntry {
   totalErrors: number;
 }
 
+function shouldFailoverFromResult(result: LightningResponse): string | null {
+  const providerStatus = result.meta.providerStatus;
+  if (providerStatus !== 'degraded') {
+    return null;
+  }
+
+  // If a provider is degraded and returns no strikes, treat it as unavailable so
+  // the registry can fail over instead of silently reporting a false all-clear.
+  if (result.strikes.length === 0) {
+    return 'Provider reported degraded status with empty strike payload';
+  }
+
+  return null;
+}
+
 function withTimeout<T>(promise: Promise<T>, ms: number, name: string): Promise<T> {
   return new Promise<T>((resolve, reject) => {
     const timer = setTimeout(
@@ -88,6 +103,11 @@ export class ProviderRegistry {
           PROVIDER_TIMEOUT_MS,
           entry.name,
         );
+
+        const failoverReason = shouldFailoverFromResult(result);
+        if (failoverReason && attempt < this.entries.length - 1) {
+          throw new Error(failoverReason);
+        }
 
         // Success: reset consecutive error count, promote to active
         entry.errorCount = 0;

@@ -148,8 +148,8 @@ class MockLightningService implements ILightningService {
 const configuredApiUrl = import.meta.env.VITE_API_URL?.trim();
 const forceDemoFromQuery = typeof window !== 'undefined'
   && new URLSearchParams(window.location.search).get('demo') === '1';
-const useDemoMode = forceDemoFromQuery
-  || (!import.meta.env.PROD && (!configuredApiUrl || configuredApiUrl.length === 0));
+const forceDemoFromEnv = import.meta.env.VITE_FORCE_DEMO === '1';
+const useDemoMode = forceDemoFromQuery || forceDemoFromEnv;
 const apiUrl = configuredApiUrl && configuredApiUrl.length > 0 ? configuredApiUrl : '';
 
 export const lightningServiceMode: 'demo' | 'live' = useDemoMode ? 'demo' : 'live';

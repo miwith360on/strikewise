@@ -20,33 +20,44 @@ interface SliderRowProps {
   onChange: (v: number) => void;
 }
 
+function colorClass(color: string): string {
+  if (color === '#ff3333') return 'text-red-400';
+  if (color === '#ff8800') return 'text-orange-400';
+  if (color === '#ffe033') return 'text-yellow-300';
+  if (color === '#00c8ff') return 'text-cyan-300';
+  return 'text-storm-200';
+}
+
+function sliderAccentClass(color: string): string {
+  if (color === '#ff3333') return 'accent-red-500';
+  if (color === '#ff8800') return 'accent-orange-500';
+  if (color === '#ffe033') return 'accent-yellow-400';
+  if (color === '#00c8ff') return 'accent-cyan-400';
+  return 'accent-storm-400';
+}
+
 function SliderRow({ label, value, min, max, step, unit, color, onChange }: SliderRowProps) {
-  const pct = ((value - min) / (max - min)) * 100;
+  const valueColorClass = colorClass(color);
+  const accentClass = sliderAccentClass(color);
 
   return (
     <div className="space-y-1.5">
       <div className="flex justify-between items-center">
         <span className="text-xs text-storm-300 font-mono">{label}</span>
-        <span className="text-sm font-mono font-semibold" style={{ color }}>
+        <span className={`text-sm font-mono font-semibold ${valueColorClass}`}>
           {value} {unit}
         </span>
       </div>
-      <div className="relative h-1.5 bg-storm-700 rounded-full">
-        <div
-          className="absolute left-0 top-0 h-full rounded-full transition-all duration-150"
-          style={{ width: `${pct}%`, backgroundColor: color }}
-        />
-        <input
-          type="range"
-          min={min}
-          max={max}
-          step={step}
-          value={value}
-          onChange={(e) => onChange(Number(e.target.value))}
-          className="absolute inset-0 w-full opacity-0 cursor-pointer h-full"
-          aria-label={label}
-        />
-      </div>
+      <input
+        type="range"
+        min={min}
+        max={max}
+        step={step}
+        value={value}
+        onChange={(e) => onChange(Number(e.target.value))}
+        className={`w-full h-1.5 cursor-pointer rounded-lg bg-storm-700 ${accentClass}`}
+        aria-label={label}
+      />
     </div>
   );
 }
@@ -68,20 +79,26 @@ function Toggle({
         {icon}
         {label}
       </span>
-      <button
-        role="switch"
-        aria-checked={checked}
-        onClick={() => onChange(!checked)}
-        className={`relative w-10 h-5 rounded-full transition-colors duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-bolt-500 ${
+      <span className="relative inline-flex items-center">
+        <input
+          type="checkbox"
+          checked={checked}
+          onChange={(e) => onChange(e.target.checked)}
+          className="peer sr-only"
+          aria-label={label}
+        />
+        <span
+          className={`relative w-10 h-5 rounded-full transition-colors duration-200 peer-focus-visible:outline-none peer-focus-visible:ring-2 peer-focus-visible:ring-bolt-500 ${
           checked ? 'bg-bolt-500' : 'bg-storm-700'
         }`}
-      >
+        >
         <span
           className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform duration-200 ${
             checked ? 'translate-x-5' : 'translate-x-0'
           }`}
         />
-      </button>
+        </span>
+      </span>
     </label>
   );
 }

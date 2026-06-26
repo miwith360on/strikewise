@@ -31,7 +31,7 @@ interface OpenMeteoResponse {
   longitude: number;
   hourly: {
     time: string[];                  // ISO8601 hour strings
-    lightning_potential: number[];   // 0–100 per hour
+    lightning_potential: Array<number | null>;   // 0–100 per hour
   };
 }
 
@@ -40,7 +40,7 @@ const openMeteoResponseSchema = z.object({
   longitude: z.number(),
   hourly: z.object({
     time: z.array(z.string()),
-    lightning_potential: z.array(z.number()),
+    lightning_potential: z.array(z.number().nullable()),
   }),
 });
 
@@ -170,7 +170,7 @@ export class OpenMeteoProvider implements LightningProvider {
       const windowStartMs = Math.max(hourEpochMs, cutoff);
       const windowEndMs = Math.min(nextHourMs, now);
 
-      const potential = lightning_potential[i] ?? 0;
+      const potential = Math.max(0, lightning_potential[i] ?? 0);
       if (potential > maxPotential) maxPotential = potential;
 
       const hourStrikes = buildStrikes(

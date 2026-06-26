@@ -15,7 +15,7 @@
     "dotenv": "^16.4.7",
     "express": "^4.21.2",
     "new-lighting-app": "file:..",
-    "tsx": "^4.19.3",
+    "tsx": "^4.22.4",
     "typescript": "^5.8.2",
     "ws": "^8.20.0",
     "zod": "^3.24.2"
