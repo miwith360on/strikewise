@@ -14,6 +14,7 @@ export interface LightningStrike {
   ageSeconds?: number;
   strikeType?: 'cg' | 'ic' | 'unknown';
   peakAmpKa?: number;
+  peakCurrentKa?: number | null;
   errorRadiusKm?: number;
 }
 

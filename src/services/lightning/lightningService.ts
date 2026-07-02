@@ -48,6 +48,10 @@ class MockLightningService implements ILightningService {
 
   // ── Public API ───────────────────────────────────────────────
 
+  async setMonitoredPoint(_location: LatLng): Promise<void> {
+    // Mock mode has no backend state to synchronize.
+  }
+
   async getRecentStrikes(_bounds: MapBounds, _minutes: number): Promise<LightningStrike[]> {
     const strikes = this._getFiltered();
     const latestStrikeAgeSeconds = strikes[0]

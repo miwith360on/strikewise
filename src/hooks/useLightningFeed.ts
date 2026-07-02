@@ -104,6 +104,18 @@ function buildFeedMessage(meta: LightningFeedMeta | null, queryWindowMinutes: nu
   return `${prefix}Live feed`;
 }
 
+function deriveFeedStatus(meta: LightningFeedMeta | null): FeedStatus {
+  if (!meta) {
+    return 'connecting';
+  }
+
+  if (meta.provider === 'error') {
+    return 'unavailable';
+  }
+
+  return 'live';
+}
+
 export function useLightningFeed(): LightningFeedState {
   const [strikes, setStrikes] = useState<LightningStrike[]>([]);
   const [alertConfig, setAlertConfigState] = useState<AlertConfig>(DEFAULT_CONFIG);
@@ -136,6 +148,13 @@ export function useLightningFeed(): LightningFeedState {
         : 'Connecting to live lightning feed',
     );
 
+    if (lightningService.setMonitoredPoint) {
+      void lightningService.setMonitoredPoint({
+        lat: monitored.lat,
+        lng: monitored.lng,
+      });
+    }
+
     void lightningService.getRecentStrikes(bounds, QUERY_WINDOW_MINUTES)
       .then((initial) => {
         if (cancelled) {
@@ -146,8 +165,9 @@ export function useLightningFeed(): LightningFeedState {
         const latestMeta = lightningService.getLatestMeta();
         setFeedMeta(latestMeta);
         if (lightningServiceMode === 'live') {
-          setIsLive(true);
-          setFeedStatus('live');
+          const nextStatus = deriveFeedStatus(latestMeta);
+          setIsLive(nextStatus === 'live');
+          setFeedStatus(nextStatus);
           setFeedMessage(buildFeedMessage(latestMeta, QUERY_WINDOW_MINUTES));
         }
 
@@ -155,8 +175,9 @@ export function useLightningFeed(): LightningFeedState {
           const currentMeta = lightningService.getLatestMeta();
           setFeedMeta(currentMeta);
           if (lightningServiceMode === 'live') {
-            setIsLive(true);
-            setFeedStatus('live');
+            const nextStatus = deriveFeedStatus(currentMeta);
+            setIsLive(nextStatus === 'live');
+            setFeedStatus(nextStatus);
             setFeedMessage(buildFeedMessage(currentMeta, QUERY_WINDOW_MINUTES));
           }
 

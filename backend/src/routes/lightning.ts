@@ -1,6 +1,8 @@
+import type { Request } from 'express';
 import { Router } from 'express';
 import { z } from 'zod';
 import { enrichLightningResponse } from '../lib/lightningAnalysis.js';
+import type { BlitzortungFeedStrike, BlitzortungProvider } from '../lib/blitzortungProvider.js';
 import { createLightningProvider } from '../providers/index.js';
 import type { BoundingBox, LightningQuery, LightningResponse } from '../types/lightning.js';
 
@@ -34,6 +36,11 @@ const querySchema = z.object({
   minutes: z.coerce.number().int().min(1).max(60).default(10),
 });
 
+const monitoredPointSchema = z.object({
+  lat: z.coerce.number().min(-90).max(90),
+  lon: z.coerce.number().min(-180).max(180),
+});
+
 function buildBounds(query: z.infer<typeof querySchema>): BoundingBox | undefined {
   if (
     query.north === undefined ||
@@ -53,6 +60,51 @@ function buildBounds(query: z.infer<typeof querySchema>): BoundingBox | undefine
 }
 
 export const lightningRouter = Router();
+
+function getBlitz(request: Request): BlitzortungProvider | null {
+  const locals = request.app.locals as { blitz?: BlitzortungProvider };
+  return locals.blitz ?? null;
+}
+
+function toApiStrike(strike: BlitzortungFeedStrike) {
+  const peakCurrentKa = typeof strike.peakCurrentKa === 'number'
+    ? strike.peakCurrentKa
+    : null;
+
+  return {
+    id: strike.id,
+    lat: strike.lat,
+    lng: strike.lon,
+    timestamp: strike.timestamp,
+    intensityKa: peakCurrentKa === null ? 0 : Math.abs(peakCurrentKa),
+    polarity: (typeof strike.polarity === 'number' && strike.polarity > 0) ? 'positive' as const : 'negative' as const,
+    multiplicity: 1,
+    strikeType: 'unknown' as const,
+    peakCurrentKa,
+  };
+}
+
+function filterBlitzStrikes(
+  strikes: BlitzortungFeedStrike[],
+  query: LightningQuery,
+) {
+  const cutoff = Date.now() - query.minutes * 60_000;
+
+  return strikes
+    .filter((strike) => strike.timestamp >= cutoff)
+    .filter((strike) => {
+      if (!query.bounds) {
+        return true;
+      }
+
+      return (
+        strike.lat >= query.bounds.south
+        && strike.lat <= query.bounds.north
+        && strike.lon >= query.bounds.west
+        && strike.lon <= query.bounds.east
+      );
+    });
+}
 
 function toQueryKey(query: LightningQuery) {
   return JSON.stringify({
@@ -130,6 +182,34 @@ lightningRouter.get('/', async (request, response, next) => {
       minutes: query.minutes,
     };
     const cacheKey = toQueryKey(normalizedQuery);
+    const blitz = getBlitz(request);
+
+    if (blitz?.getHealth().state === 'LIVE') {
+      const blitzHealth = blitz.getHealth();
+      const blitzStrikes = filterBlitzStrikes(blitz.getStrikes(), normalizedQuery).map(toApiStrike);
+      const payload: LightningResponse = {
+        provider: 'blitzortung',
+        generatedAt: Date.now(),
+        strikes: blitzStrikes,
+        meta: {
+          simulated: false,
+          source: 'blitzortung-live-ws-primary',
+          providerStatus: 'ok',
+          notes: [
+            'Blitzortung LIVE primary feed in use.',
+            `Buffered strikes: ${blitzHealth.bufferedStrikes}`,
+          ],
+        },
+      };
+
+      const analyzedPayload = enrichLightningResponse(normalizedQuery, payload, {
+        cached: false,
+        cacheAgeSeconds: 0,
+      });
+
+      response.json(analyzedPayload);
+      return;
+    }
 
     let payload: LightningResponse;
     let cacheState: { cached: boolean; cachedAt: number } = { cached: false, cachedAt: Date.now() };
@@ -152,6 +232,20 @@ lightningRouter.get('/', async (request, response, next) => {
       };
     }
 
+    const blitzHealth = blitz?.getHealth();
+    if (blitzHealth && payload.provider !== 'blitzortung') {
+      payload = {
+        ...payload,
+        meta: {
+          ...payload.meta,
+          notes: [
+            `Blitzortung ${blitzHealth.state}; using fallback provider path.`,
+            ...(payload.meta.notes ?? []),
+          ],
+        },
+      };
+    }
+
     const analyzedPayload = enrichLightningResponse(
       normalizedQuery,
       payload,
@@ -167,6 +261,31 @@ lightningRouter.get('/', async (request, response, next) => {
     );
 
     response.json(analyzedPayload);
+  } catch (error) {
+    next(error);
+  }
+});
+
+lightningRouter.post('/monitored-point', (request, response, next) => {
+  try {
+    const body = monitoredPointSchema.parse(request.body);
+    const blitz = getBlitz(request);
+
+    if (!blitz) {
+      response.status(503).json({
+        error: 'Blitzortung provider is not initialized',
+      });
+      return;
+    }
+
+    blitz.setMonitoredPoint(body.lat, body.lon);
+    const health = blitz.getHealth();
+
+    response.json({
+      ok: true,
+      monitoredPoint: body,
+      blitzState: health.state,
+    });
   } catch (error) {
     next(error);
   }

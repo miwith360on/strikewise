@@ -50,6 +50,16 @@ function buildEmptyStateMessage(feedStatus: FeedStatus, feedMeta?: LightningFeed
   return 'No strikes detected in this monitored box yet.';
 }
 
+function readPeakCurrentKa(strike: LightningStrike): number | null {
+  if (typeof strike.peakCurrentKa === 'number' && Number.isFinite(strike.peakCurrentKa)) {
+    return strike.peakCurrentKa;
+  }
+  if (typeof strike.peakAmpKa === 'number' && Number.isFinite(strike.peakAmpKa)) {
+    return strike.peakAmpKa;
+  }
+  return null;
+}
+
 export function StrikeStatsPanel({
   strikes,
   isLive,
@@ -60,13 +70,15 @@ export function StrikeStatsPanel({
 }: StrikeStatsPanelProps) {
   const sorted = [...strikes].sort((a, b) => b.timestamp - a.timestamp);
   const recent = sorted.slice(0, 5);
-  const avgIntensity =
-    strikes.length > 0
-      ? Math.round(strikes.reduce((s, k) => s + k.intensityKa, 0) / strikes.length)
-      : 0;
-  const maxIntensity = strikes.length > 0
-    ? Math.round(Math.max(...strikes.map((s) => s.intensityKa)))
-    : 0;
+  const measurableCurrents = strikes
+    .map(readPeakCurrentKa)
+    .filter((value): value is number => value !== null);
+  const avgIntensity = measurableCurrents.length > 0
+    ? Math.round(measurableCurrents.reduce((sum, value) => sum + Math.abs(value), 0) / measurableCurrents.length)
+    : null;
+  const maxIntensity = measurableCurrents.length > 0
+    ? Math.round(Math.max(...measurableCurrents.map((value) => Math.abs(value))))
+    : null;
 
   const { rate, trend } = computeStrikeRate(strikes);
   const trendIcon = trend === 'rising' ? '↑' : trend === 'falling' ? '↓' : '→';
@@ -104,11 +116,11 @@ export function StrikeStatsPanel({
           <p className="text-[10px] font-mono uppercase tracking-wider text-storm-500">Total</p>
         </div>
         <div className="text-center border-l border-r border-storm-700">
-          <p className="text-xl font-display font-bold text-storm-200">{avgIntensity}</p>
+          <p className="text-xl font-display font-bold text-storm-200">{avgIntensity ?? '—'}</p>
           <p className="text-[10px] font-mono uppercase tracking-wider text-storm-500">Avg kA</p>
         </div>
         <div className="text-center">
-          <p className="text-xl font-display font-bold text-plasma-500">{maxIntensity}</p>
+          <p className="text-xl font-display font-bold text-plasma-500">{maxIntensity ?? '—'}</p>
           <p className="text-[10px] font-mono uppercase tracking-wider text-storm-500">Peak kA</p>
         </div>
       </div>
@@ -158,6 +170,9 @@ export function StrikeStatsPanel({
           </div>
         )}
         {recent.map((s, i) => (
+          (() => {
+            const strikeCurrent = readPeakCurrentKa(s);
+            return (
           <div
             key={s.id}
             className={`flex items-center justify-between py-1 px-2 rounded-lg text-xs font-mono ${
@@ -169,7 +184,7 @@ export function StrikeStatsPanel({
                 className={`w-3 h-3 ${i === 0 ? 'text-bolt-500' : 'text-storm-500'}`}
               />
               <span className={i === 0 ? 'text-storm-200' : 'text-storm-500'}>
-                {Math.round(s.intensityKa)} kA
+                {strikeCurrent === null ? '—' : `${Math.round(Math.abs(strikeCurrent))} kA`}
               </span>
               <span className="text-storm-600">
                 {s.polarity === 'positive' ? '+CG' : '−CG'}
@@ -179,6 +194,8 @@ export function StrikeStatsPanel({
               {timeAgo(s.timestamp)}
             </span>
           </div>
+            );
+          })()
         ))}
       </div>
     </div>

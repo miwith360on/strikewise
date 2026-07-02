@@ -2,7 +2,12 @@ import { useNavigate } from 'react-router-dom';
 import { BoltIcon, LocationIcon } from '@/components/ui/Icons';
 import { SafetyBadge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
-import type { FeedStatus, SafetyStatus, MonitoredLocation } from '@/services/lightning/types';
+import type {
+  FeedStatus,
+  LightningFeedMeta,
+  SafetyStatus,
+  MonitoredLocation,
+} from '@/services/lightning/types';
 
 interface HeaderProps {
   location: MonitoredLocation;
@@ -10,9 +15,53 @@ interface HeaderProps {
   strikeCount: number;
   feedStatus: FeedStatus;
   feedMessage: string;
+  feedMeta?: LightningFeedMeta | null;
   locationConfidence: 'high' | 'low';
   onRequestGPS: () => void;
   gpsLoading: boolean;
+}
+
+function getFeedIndicator(
+  feedStatus: FeedStatus,
+  feedMeta?: LightningFeedMeta | null,
+): { label: string; className: string; dotClassName?: string } {
+  if (feedStatus === 'connecting') {
+    return {
+      label: 'Connecting...',
+      className: 'text-[10px] font-mono text-storm-500 uppercase tracking-wider',
+    };
+  }
+
+  if (feedStatus === 'demo') {
+    return {
+      label: 'Demo feed',
+      className: 'text-[10px] font-mono text-bolt-500 uppercase tracking-wider',
+    };
+  }
+
+  if (feedStatus === 'unavailable' || feedMeta?.provider === 'error') {
+    return {
+      label: 'No providers',
+      className: 'text-[10px] font-mono text-storm-400 uppercase tracking-wider',
+    };
+  }
+
+  const provider = (feedMeta?.provider ?? '').toLowerCase();
+  const source = (feedMeta?.source ?? '').toLowerCase();
+  const isGlmFallback = provider.includes('glm') || provider.includes('noaa') || source.includes('noaa');
+
+  if (isGlmFallback) {
+    return {
+      label: 'GLM fallback',
+      className: 'text-[10px] font-mono text-strike-warning uppercase tracking-wider',
+    };
+  }
+
+  return {
+    label: 'Live',
+    className: 'flex items-center gap-1 text-[10px] font-mono text-strike-safe uppercase tracking-wider',
+    dotClassName: 'w-1.5 h-1.5 rounded-full bg-strike-safe animate-pulse',
+  };
 }
 
 export function Header({
@@ -21,11 +70,13 @@ export function Header({
   strikeCount,
   feedStatus,
   feedMessage,
+  feedMeta,
   locationConfidence,
   onRequestGPS,
   gpsLoading,
 }: HeaderProps) {
   const navigate = useNavigate();
+  const indicator = getFeedIndicator(feedStatus, feedMeta);
 
   return (
     <header className="flex items-center justify-between px-4 py-3 border-b border-storm-700 bg-storm-900/80 backdrop-blur-sm sticky top-0 z-50">
@@ -60,23 +111,13 @@ export function Header({
           </span>
         </div>
         <div className="flex items-center gap-2">
-          {feedStatus === 'live' ? (
-            <span className="flex items-center gap-1 text-[10px] font-mono text-strike-safe uppercase tracking-wider">
-              <span className="w-1.5 h-1.5 rounded-full bg-strike-safe animate-pulse" />
-              Live
-            </span>
-          ) : feedStatus === 'demo' ? (
-            <span className="text-[10px] font-mono text-bolt-500 uppercase tracking-wider">
-              Demo feed
-            </span>
-          ) : feedStatus === 'unavailable' ? (
-            <span className="text-[10px] font-mono text-strike-warning uppercase tracking-wider">
-              Feed unavailable
+          {indicator.dotClassName ? (
+            <span className={indicator.className}>
+              <span className={indicator.dotClassName} />
+              {indicator.label}
             </span>
           ) : (
-            <span className="text-[10px] font-mono text-storm-500 uppercase tracking-wider">
-              Connecting…
-            </span>
+            <span className={indicator.className}>{indicator.label}</span>
           )}
           <span className="text-[10px] font-mono text-storm-500">
             {strikeCount} strikes / 10 min

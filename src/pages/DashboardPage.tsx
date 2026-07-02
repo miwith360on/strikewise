@@ -377,7 +377,15 @@ export default function DashboardPage() {
   const closestStrikeLabel = feedMeta?.closestStrikeKm != null
     ? `${feedMeta.closestStrikeKm.toFixed(1)} km`
     : 'none';
-  const resultStateLabel = feedMeta?.resultState ?? (strikes.length > 0 ? 'active' : 'empty');
+  const providerSlug = (feedMeta?.provider ?? '').toLowerCase();
+  const sourceSlug = (feedMeta?.source ?? '').toLowerCase();
+  const diagnosticState = feedMeta?.provider === 'error' || feedStatus === 'unavailable'
+    ? { label: 'NO PROVIDERS', className: 'text-storm-400' }
+    : providerSlug === 'blitzortung' && feedMeta?.providerStatus !== 'degraded'
+      ? { label: 'LIVE', className: 'text-strike-safe' }
+      : providerSlug.includes('glm') || providerSlug.includes('noaa') || sourceSlug.includes('noaa')
+        ? { label: 'GLM FALLBACK', className: 'text-strike-warning' }
+        : { label: (feedMeta?.resultState ?? (strikes.length > 0 ? 'active' : 'empty')).toUpperCase(), className: 'text-storm-200' };
   const feedDiagnostics = (
     <div className="glass-card w-full max-w-full rounded-xl border border-storm-600 px-3 py-2 shadow-card">
       <div className="text-[10px] font-mono uppercase tracking-widest text-storm-400">
@@ -388,7 +396,7 @@ export default function DashboardPage() {
         <span className="min-w-0 justify-self-end break-words text-right text-storm-200">{providerName}</span>
 
         <span className="text-storm-500">state</span>
-        <span className="min-w-0 justify-self-end break-words text-right uppercase text-storm-200">{resultStateLabel}</span>
+  <span className={`min-w-0 justify-self-end break-words text-right uppercase ${diagnosticState.className}`}>{diagnosticState.label}</span>
 
         <span className="text-storm-500">closest strike</span>
         <span className="min-w-0 justify-self-end break-words text-right text-bolt-400">{closestStrikeLabel}</span>
@@ -410,6 +418,7 @@ export default function DashboardPage() {
         strikeCount={effectiveSafetyStatus.strikeCountLast10min}
         feedStatus={feedStatus}
         feedMessage={feedMessage}
+        feedMeta={feedMeta}
         locationConfidence={locationConfidence}
         onRequestGPS={requestGPS}
         gpsLoading={gpsLoading}

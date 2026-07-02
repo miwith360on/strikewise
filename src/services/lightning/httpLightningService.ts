@@ -136,6 +136,19 @@ export class HttpLightningService implements ILightningService {
 
   // ── Public API ───────────────────────────────────────────────
 
+  async setMonitoredPoint(location: LatLng): Promise<void> {
+    await fetch(`${this.baseUrl}/api/lightning/monitored-point`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        lat: location.lat,
+        lon: location.lng,
+      }),
+    });
+  }
+
   async getRecentStrikes(bounds: MapBounds, minutes: number): Promise<LightningStrike[]> {
     const params = new URLSearchParams({
       minutes: String(minutes),

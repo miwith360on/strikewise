@@ -27,6 +27,8 @@ export interface LightningStrike {
   strikeType?: 'cg' | 'ic' | 'unknown';
   /** Signed peak current from source payload (xWeather: ob.pulse.peakamp). */
   peakAmpKa?: number;
+  /** Nullable peak current from providers that omit amperage values. */
+  peakCurrentKa?: number | null;
   /** Source location precision radius in kilometers when available. */
   errorRadiusKm?: number;
 }
@@ -122,6 +124,9 @@ export interface AlertConfig {
 export interface ILightningService {
   /** Fetch strikes within the given bounds from the last `minutes` minutes */
   getRecentStrikes(bounds: MapBounds, minutes: number): Promise<LightningStrike[]>;
+
+  /** Optional backend sync for providers that maintain a monitored-point server-side. */
+  setMonitoredPoint?(location: LatLng): Promise<void>;
 
   /** Latest metadata returned alongside the most recent strike fetch. */
   getLatestMeta(): LightningFeedMeta | null;
