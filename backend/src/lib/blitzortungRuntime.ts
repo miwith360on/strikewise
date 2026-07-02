@@ -9,7 +9,7 @@ type BlitzortungProviderConstructor = new (
 ) => BlitzortungProviderClass;
 
 const require = createRequire(import.meta.url);
-const runtime = require('./blitzortungProvider.js') as {
+const runtime = require('./blitzortungProvider.cjs') as {
   BlitzortungProvider: BlitzortungProviderConstructor;
 };
 

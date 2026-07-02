@@ -7,8 +7,8 @@ const projectRoot = resolve(scriptsDir, '..');
 
 const assetCopies = [
   {
-    src: resolve(projectRoot, 'src/lib/blitzortungProvider.js'),
-    dst: resolve(projectRoot, 'dist/lib/blitzortungProvider.js'),
+    src: resolve(projectRoot, 'src/lib/blitzortungProvider.cjs'),
+    dst: resolve(projectRoot, 'dist/lib/blitzortungProvider.cjs'),
   },
 ];
 

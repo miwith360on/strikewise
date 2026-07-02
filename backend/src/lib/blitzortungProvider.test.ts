@@ -3,7 +3,7 @@ import test from 'node:test';
 import { createRequire } from 'node:module';
 
 const require = createRequire(import.meta.url);
-const { BlitzortungProvider } = require('./blitzortungProvider.js') as {
+const { BlitzortungProvider } = require('./blitzortungProvider.cjs') as {
   BlitzortungProvider: new (opts?: { lat?: number; lon?: number }) => any;
 };
 
