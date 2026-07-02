@@ -5,7 +5,7 @@ import cors from 'cors';
 import express from 'express';
 import { ZodError } from 'zod';
 import { env } from './config/env.js';
-import { BlitzortungProvider } from './lib/blitzortungProvider.js';
+import { BlitzortungProvider } from './lib/blitzortungRuntime.js';
 import { alertsRouter } from './routes/alerts.js';
 import { healthRouter } from './routes/health.js';
 import { lightningRouter } from './routes/lightning.js';

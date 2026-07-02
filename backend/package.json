@@ -10,7 +10,7 @@
     "dev": "tsx watch src/index.ts",
     "test": "tsx --test src/**/*.test.ts",
     "build:web": "npm --prefix .. run build",
-    "build:server": "tsc -p tsconfig.json",
+    "build:server": "tsc -p tsconfig.json && node ./scripts/copy-runtime-assets.mjs",
     "build": "npm run build:web && npm run build:server",
     "start": "node dist/index.js"
   },
