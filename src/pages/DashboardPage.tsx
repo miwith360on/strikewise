@@ -409,6 +409,8 @@ export default function DashboardPage() {
     </div>
   );
 
+  const isInitialLoading = feedStatus === 'connecting' && strikes.length === 0;
+
   return (
     <div className="flex min-h-screen flex-col overflow-x-hidden bg-storm-950">
       {/* Sticky header */}
@@ -461,7 +463,20 @@ export default function DashboardPage() {
               }}
             />
 
-            <div className="pointer-events-none absolute top-3 right-3 z-[1000] flex items-center gap-2 rounded-xl border border-storm-600 px-3 py-1.5 shadow-card glass-card max-w-[calc(100vw-1.5rem)]">
+            {isInitialLoading && (
+              <div className="pointer-events-none absolute inset-0 z-[1010] flex items-end justify-center bg-gradient-to-t from-storm-950 via-storm-950/80 to-transparent px-4 pb-5">
+                <div className="w-full max-w-md rounded-2xl border border-storm-600 bg-storm-950/95 p-4 shadow-card backdrop-blur-sm">
+                  <div className="h-3 w-24 rounded bg-storm-700/80 animate-pulse" />
+                  <div className="mt-3 space-y-2">
+                    <div className="h-3 w-full rounded bg-storm-700/70 animate-pulse" />
+                    <div className="h-3 w-5/6 rounded bg-storm-700/70 animate-pulse" />
+                    <div className="h-3 w-2/3 rounded bg-storm-700/70 animate-pulse" />
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <div className="pointer-events-none absolute top-3 right-3 z-[1000] hidden items-center gap-2 rounded-xl border border-storm-600 px-3 py-1.5 shadow-card glass-card max-w-[calc(100vw-1.5rem)] sm:flex">
               <span className="text-bolt-500 font-mono font-bold text-sm tabular-nums">
                 {effectiveSafetyStatus.strikeCountLast10min}
               </span>
@@ -470,7 +485,7 @@ export default function DashboardPage() {
               </span>
             </div>
 
-            <div className="pointer-events-none absolute left-3 top-3 z-[1000] max-w-[calc(100vw-1.5rem)] rounded-xl border border-storm-600 px-3 py-2 shadow-card glass-card">
+            <div className="pointer-events-none absolute left-3 top-3 z-[1000] hidden max-w-[calc(100vw-1.5rem)] rounded-xl border border-storm-600 px-3 py-2 shadow-card glass-card sm:block">
               <div className="flex items-center gap-2 text-[10px] font-mono uppercase tracking-widest text-storm-300">
                 <span className="h-2 w-2 rounded-full bg-plasma-500" /> monitored point
               </div>
@@ -480,16 +495,16 @@ export default function DashboardPage() {
               </div>
             </div>
 
-            <div className="pointer-events-none absolute bottom-3 left-3 z-[1000] max-w-[calc(50vw-1.5rem)] text-[9px] font-mono text-storm-500 [text-shadow:0_1px_10px_rgba(0,0,0,0.9)]">
+            <div className="pointer-events-none absolute bottom-3 left-3 z-[1000] hidden max-w-[calc(50vw-1.5rem)] text-[9px] font-mono text-storm-500 [text-shadow:0_1px_10px_rgba(0,0,0,0.9)] sm:block">
               Preview feed · Not for safety-critical decisions
             </div>
 
-            <div className="pointer-events-none absolute bottom-3 right-3 z-[1000] max-w-[calc(50vw-1.5rem)] text-right text-[9px] font-mono text-storm-500 [text-shadow:0_1px_10px_rgba(0,0,0,0.9)]">
+            <div className="pointer-events-none absolute bottom-3 right-3 z-[1000] hidden max-w-[calc(50vw-1.5rem)] text-right text-[9px] font-mono text-storm-500 [text-shadow:0_1px_10px_rgba(0,0,0,0.9)] sm:block">
               Leaflet | OpenStreetMap contributors
             </div>
           </div>
 
-          <div className="flex flex-col gap-3 p-3 lg:hidden">
+          <div className="sticky bottom-0 z-30 flex flex-col gap-3 rounded-t-3xl border-t border-storm-700 bg-storm-950/98 p-3 shadow-[0_-12px_40px_rgba(0,0,0,0.45)] backdrop-blur-lg lg:hidden">
             <MapStrikeInspector
               strike={selectedStrike}
               monitored={alertConfig.monitored}
@@ -509,7 +524,12 @@ export default function DashboardPage() {
               canExpandRadius={canExpandRadius}
             />
 
-            {feedDiagnostics}
+            <details className="rounded-2xl border border-storm-700 bg-storm-900/35 px-3 py-2">
+              <summary className="cursor-pointer list-none text-[10px] font-mono uppercase tracking-widest text-storm-400">
+                Feed Diagnostics
+              </summary>
+              <div className="mt-2">{feedDiagnostics}</div>
+            </details>
           </div>
         </div>
 

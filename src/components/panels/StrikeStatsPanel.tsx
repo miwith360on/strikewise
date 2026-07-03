@@ -60,6 +60,28 @@ function readPeakCurrentKa(strike: LightningStrike): number | null {
   return null;
 }
 
+function formatSecondsAgo(seconds?: number | null): string {
+  if (seconds == null || !Number.isFinite(seconds)) {
+    return '—';
+  }
+
+  if (seconds < 60) return `${Math.max(0, Math.round(seconds))}s ago`;
+  return `${Math.floor(seconds / 60)}m ago`;
+}
+
+function StatTile({ label, value, tone }: { label: string; value: string; tone: string }) {
+  return (
+    <div className={`rounded-xl border border-storm-700/80 bg-storm-900/50 px-3 py-2 ${tone}`}>
+      <div className="text-[10px] font-mono uppercase tracking-wider text-storm-500">{label}</div>
+      <div className="mt-1 text-lg font-display font-bold text-storm-50">{value}</div>
+    </div>
+  );
+}
+
+function LoadingStatTile() {
+  return <div className="h-[72px] rounded-xl border border-storm-700/80 bg-storm-900/50 animate-pulse" />;
+}
+
 export function StrikeStatsPanel({
   strikes,
   isLive,
@@ -70,6 +92,7 @@ export function StrikeStatsPanel({
 }: StrikeStatsPanelProps) {
   const sorted = [...strikes].sort((a, b) => b.timestamp - a.timestamp);
   const recent = sorted.slice(0, 5);
+  const latestStrike = sorted[0] ?? null;
   const measurableCurrents = strikes
     .map(readPeakCurrentKa)
     .filter((value): value is number => value !== null);
@@ -83,11 +106,20 @@ export function StrikeStatsPanel({
   const { rate, trend } = computeStrikeRate(strikes);
   const trendIcon = trend === 'rising' ? '↑' : trend === 'falling' ? '↓' : '→';
   const trendColor = trend === 'rising' ? 'text-red-400' : trend === 'falling' ? 'text-green-400' : 'text-storm-400';
+  const closestLabel = feedMeta?.closestStrikeKm != null ? `${feedMeta.closestStrikeKm.toFixed(1)} km` : '—';
+  const latestLabel = feedMeta?.latestStrikeAgeSeconds != null
+    ? formatSecondsAgo(feedMeta.latestStrikeAgeSeconds)
+    : latestStrike
+      ? formatSecondsAgo(Math.max(0, Math.round((Date.now() - latestStrike.timestamp) / 1000)))
+      : '—';
+  const peakLabel = maxIntensity == null ? '—' : `${maxIntensity} kA`;
+
+  const isLoading = feedStatus === 'connecting' && strikes.length === 0;
 
   return (
     <div className="glass-card border border-white/5 p-4 space-y-3">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-3">
         <span className="text-xs uppercase tracking-widest text-storm-400 font-mono">
           Recent Strikes
         </span>
@@ -111,18 +143,34 @@ export function StrikeStatsPanel({
 
       {/* Summary stats */}
       <div className="grid grid-cols-3 gap-2 border-b border-storm-700 pb-3">
-        <div className="text-center">
-          <p className="text-xl font-display font-bold text-bolt-500">{strikes.length}</p>
-          <p className="text-[10px] font-mono uppercase tracking-wider text-storm-500">Total</p>
-        </div>
-        <div className="text-center border-l border-r border-storm-700">
-          <p className="text-xl font-display font-bold text-storm-200">{avgIntensity ?? '—'}</p>
-          <p className="text-[10px] font-mono uppercase tracking-wider text-storm-500">Avg kA</p>
-        </div>
-        <div className="text-center">
-          <p className="text-xl font-display font-bold text-plasma-500">{maxIntensity ?? '—'}</p>
-          <p className="text-[10px] font-mono uppercase tracking-wider text-storm-500">Peak kA</p>
-        </div>
+        {isLoading ? (
+          <>
+            <LoadingStatTile />
+            <LoadingStatTile />
+            <LoadingStatTile />
+          </>
+        ) : (
+          <>
+            <StatTile label="Latest" value={latestLabel} tone="ring-1 ring-bolt-500/20" />
+            <StatTile label="Closest" value={closestLabel} tone="ring-1 ring-plasma-500/20" />
+            <StatTile label="Peak" value={peakLabel} tone="ring-1 ring-storm-500/20" />
+          </>
+        )}
+      </div>
+
+      {/* Secondary stats */}
+      <div className="grid grid-cols-2 gap-2">
+        {isLoading ? (
+          <>
+            <LoadingStatTile />
+            <LoadingStatTile />
+          </>
+        ) : (
+          <>
+            <StatTile label="Total" value={String(strikes.length)} tone="" />
+            <StatTile label="Avg kA" value={avgIntensity == null ? '—' : String(avgIntensity)} tone="" />
+          </>
+        )}
       </div>
 
       {/* Data source row */}
@@ -155,6 +203,13 @@ export function StrikeStatsPanel({
 
       {/* Strike feed */}
       <div className="space-y-1">
+        {isLoading && (
+          <div className="space-y-2 rounded-lg border border-storm-700 bg-storm-900/40 p-3">
+            <div className="h-3 w-24 rounded bg-storm-700/70 animate-pulse" />
+            <div className="h-3 w-5/6 rounded bg-storm-700/70 animate-pulse" />
+            <div className="h-3 w-2/3 rounded bg-storm-700/70 animate-pulse" />
+          </div>
+        )}
         {recent.length === 0 && (
           <div className="rounded-lg border border-storm-700 bg-storm-900/40 p-3">
             <p className="text-xs text-storm-300 font-mono text-center">

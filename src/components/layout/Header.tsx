@@ -27,7 +27,7 @@ function getFeedIndicator(
 ): { label: string; className: string; dotClassName?: string } {
   if (feedStatus === 'connecting') {
     return {
-      label: 'Connecting...',
+      label: 'Connecting feed',
       className: 'text-[10px] font-mono text-storm-500 uppercase tracking-wider',
     };
   }
@@ -41,7 +41,7 @@ function getFeedIndicator(
 
   if (feedStatus === 'unavailable' || feedMeta?.provider === 'error') {
     return {
-      label: 'No providers',
+      label: 'No live provider',
       className: 'text-[10px] font-mono text-storm-400 uppercase tracking-wider',
     };
   }
@@ -58,10 +58,27 @@ function getFeedIndicator(
   }
 
   return {
-    label: 'Live',
+    label: 'Blitzortung live',
     className: 'flex items-center gap-1 text-[10px] font-mono text-strike-safe uppercase tracking-wider',
     dotClassName: 'w-1.5 h-1.5 rounded-full bg-strike-safe animate-pulse',
   };
+}
+
+function formatFreshness(meta?: LightningFeedMeta | null): string | null {
+  if (!meta) return null;
+
+  if (typeof meta.cacheAgeSeconds === 'number') {
+    if (meta.cached) {
+      return `Cached ${Math.max(0, meta.cacheAgeSeconds)}s ago`;
+    }
+  }
+
+  if (typeof meta.generatedAt === 'number' && Number.isFinite(meta.generatedAt)) {
+    const ageSec = Math.max(0, Math.round((Date.now() - meta.generatedAt) / 1000));
+    return `Updated ${ageSec}s ago`;
+  }
+
+  return null;
 }
 
 export function Header({
@@ -77,6 +94,7 @@ export function Header({
 }: HeaderProps) {
   const navigate = useNavigate();
   const indicator = getFeedIndicator(feedStatus, feedMeta);
+  const freshnessLabel = formatFreshness(feedMeta);
 
   return (
     <header className="flex items-center justify-between px-4 py-3 border-b border-storm-700 bg-storm-900/80 backdrop-blur-sm sticky top-0 z-50">
@@ -126,6 +144,11 @@ export function Header({
         <div className="text-[10px] font-mono text-storm-500 truncate max-w-[220px]">
           {feedMessage}
         </div>
+        {freshnessLabel && (
+          <div className="text-[10px] font-mono text-storm-600 truncate max-w-[220px]">
+            {freshnessLabel}
+          </div>
+        )}
       </div>
 
       {/* Right: safety badge + GPS */}
