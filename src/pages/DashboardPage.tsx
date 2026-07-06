@@ -305,6 +305,7 @@ export default function DashboardPage() {
     feedStatus,
     feedMessage,
     feedMeta,
+    riskNowcast,
     setAlertConfig,
     setMonitoredLocation,
   } = useLightningFeed();
@@ -513,7 +514,13 @@ export default function DashboardPage() {
 
             <ThunderETAPanel etas={thunderETAs} />
 
-            <SafetyRadiusPanel status={effectiveSafetyStatus} alertConfig={alertConfig} regionalAlertText={regionalAlertText} riskDriver={riskDriver} />
+            <SafetyRadiusPanel
+              status={effectiveSafetyStatus}
+              alertConfig={alertConfig}
+              regionalAlertText={regionalAlertText}
+              riskDriver={riskDriver}
+              riskNowcast={riskNowcast}
+            />
 
             <StrikeStatsPanel
               strikes={strikes}
@@ -542,7 +549,13 @@ export default function DashboardPage() {
             />
 
             <CollapsibleSection title="Safety Status" defaultOpen>
-              <SafetyRadiusPanel status={effectiveSafetyStatus} alertConfig={alertConfig} regionalAlertText={regionalAlertText} riskDriver={riskDriver} />
+              <SafetyRadiusPanel
+                status={effectiveSafetyStatus}
+                alertConfig={alertConfig}
+                regionalAlertText={regionalAlertText}
+                riskDriver={riskDriver}
+                riskNowcast={riskNowcast}
+              />
             </CollapsibleSection>
 
             <CollapsibleSection title="Thunder ETA" defaultOpen>

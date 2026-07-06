@@ -11,6 +11,7 @@ import type {
   ILightningService,
   LatLng,
   LightningFeedMeta,
+  LightningRiskNowcast,
   LightningStrike,
   MapBounds,
   SafetyStatus,
@@ -135,6 +136,54 @@ export class HttpLightningService implements ILightningService {
   }
 
   // ── Public API ───────────────────────────────────────────────
+
+  async getRiskNowcast(location: LatLng): Promise<LightningRiskNowcast | null> {
+    const params = new URLSearchParams({
+      lat: String(location.lat),
+      lng: String(location.lng),
+    });
+
+    const res = await fetch(`${this.baseUrl}/api/lightning/risk?${params.toString()}`);
+    if (!res.ok) {
+      return null;
+    }
+
+    const raw = await res.json();
+    if (!isRecord(raw)) {
+      return null;
+    }
+
+    if (
+      typeof raw.ready !== 'boolean'
+      || typeof raw.horizonMinutes !== 'number'
+      || typeof raw.radiusKm !== 'number'
+      || typeof raw.lat !== 'number'
+      || typeof raw.lng !== 'number'
+      || typeof raw.riskLevel !== 'string'
+      || typeof raw.strikeProbability !== 'number'
+      || typeof raw.modelSource !== 'string'
+      || typeof raw.featureCount !== 'number'
+    ) {
+      return null;
+    }
+
+    if (raw.riskLevel !== 'low' && raw.riskLevel !== 'moderate' && raw.riskLevel !== 'high') {
+      return null;
+    }
+
+    return {
+      ready: raw.ready,
+      horizonMinutes: raw.horizonMinutes,
+      radiusKm: raw.radiusKm,
+      lat: raw.lat,
+      lng: raw.lng,
+      riskLevel: raw.riskLevel,
+      strikeProbability: raw.strikeProbability,
+      modelSource: raw.modelSource,
+      featureCount: raw.featureCount,
+      asOf: typeof raw.asOf === 'string' ? raw.asOf : null,
+    };
+  }
 
   async setMonitoredPoint(location: LatLng): Promise<void> {
     await fetch(`${this.baseUrl}/api/lightning/monitored-point`, {

@@ -1,6 +1,7 @@
 import logging
 import math
 import os
+import pickle
 import sqlite3
 import threading
 from contextlib import asynccontextmanager, closing
@@ -10,7 +11,9 @@ from typing import Any
 import numpy as np
 import requests
 from fastapi import FastAPI
+from sklearn.calibration import CalibratedClassifierCV
 from sklearn.cluster import DBSCAN
+from sklearn.ensemble import GradientBoostingClassifier
 from sklearn.linear_model import LinearRegression
 
 APP_DIR = os.path.dirname(__file__)
@@ -25,12 +28,248 @@ MIN_CLUSTER_POINTS = int(os.getenv("ML_MIN_CLUSTER_POINTS", "4"))
 MIN_BUCKETS_FOR_PREDICTION = int(os.getenv("ML_MIN_BUCKETS_FOR_PREDICTION", "3"))
 REQUEST_TIMEOUT_SECONDS = int(os.getenv("ML_REQUEST_TIMEOUT_SECONDS", "20"))
 RECENT_STRIKE_WINDOW_MINUTES = 10
+RISK_HORIZON_MINUTES = int(os.getenv("ML_RISK_HORIZON_MINUTES", "10"))
+RISK_RADIUS_KM = float(os.getenv("ML_RISK_RADIUS_KM", "20"))
+RISK_MODEL_PATH = os.getenv("ML_RISK_MODEL_PATH", os.path.join(APP_DIR, "risk_model.pkl"))
+RISK_FEATURE_WINDOW_MINUTES = int(os.getenv("ML_RISK_FEATURE_WINDOW_MINUTES", "60"))
 
 POLL_MIN_SECONDS = max(1, POLL_MIN_SECONDS)
 POLL_MAX_SECONDS = max(POLL_MIN_SECONDS, POLL_MAX_SECONDS)
 
 logger = logging.getLogger("strikewise-ml")
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
+
+
+def haversine_km(lat1: float, lng1: float, lat2: float, lng2: float) -> float:
+    earth_r = 6371.0
+    lat1r = math.radians(lat1)
+    lat2r = math.radians(lat2)
+    dlat = lat2r - lat1r
+    dlng = math.radians(lng2 - lng1)
+    a = (
+        math.sin(dlat / 2) ** 2
+        + math.cos(lat1r) * math.cos(lat2r) * math.sin(dlng / 2) ** 2
+    )
+    return 2 * earth_r * math.asin(math.sqrt(a))
+
+
+def build_risk_features(
+    rows: list[sqlite3.Row],
+    monitored_lat: float,
+    monitored_lng: float,
+    as_of_ts_ms: int,
+) -> dict[str, float]:
+    windows_min = [5, 10, 20, 30]
+    rings_km: list[tuple[float, float]] = [(0, 5), (5, 10), (10, 20), (20, 40)]
+    features: dict[str, float] = {}
+
+    for window in windows_min:
+        cutoff = as_of_ts_ms - window * 60 * 1000
+        window_rows = [row for row in rows if int(row["strike_timestamp"]) >= cutoff]
+        features[f"count_{window}m"] = float(len(window_rows))
+
+        if window_rows:
+            avg_intensity = sum(float(row["intensity"]) for row in window_rows) / len(window_rows)
+            features[f"avg_intensity_{window}m"] = float(avg_intensity)
+        else:
+            features[f"avg_intensity_{window}m"] = 0.0
+
+        for ring_start, ring_end in rings_km:
+            key = f"count_{window}m_{int(ring_start)}_{int(ring_end)}km"
+            count = 0
+            for row in window_rows:
+                dist = haversine_km(
+                    monitored_lat,
+                    monitored_lng,
+                    float(row["lat"]),
+                    float(row["lng"]),
+                )
+                if ring_start <= dist < ring_end:
+                    count += 1
+            features[key] = float(count)
+
+    past_5m = features["count_5m"]
+    past_20m = features["count_20m"]
+    features["rate_trend_5m_vs_20m"] = float((past_5m * 4) - past_20m)
+
+    history_rows = [row for row in rows if int(row["strike_timestamp"]) <= as_of_ts_ms]
+    if history_rows:
+        latest = max(int(row["strike_timestamp"]) for row in history_rows)
+        features["seconds_since_last_strike"] = float(max(0, (as_of_ts_ms - latest) // 1000))
+    else:
+        features["seconds_since_last_strike"] = float(24 * 60 * 60)
+
+    return features
+
+
+def risk_feature_vector(features: dict[str, float]) -> tuple[list[str], np.ndarray]:
+    keys = sorted(features.keys())
+    values = np.array([features[key] for key in keys], dtype=float)
+    return keys, values
+
+
+def load_risk_model_bundle() -> dict[str, Any] | None:
+    if not os.path.exists(RISK_MODEL_PATH):
+        return None
+    with open(RISK_MODEL_PATH, "rb") as fh:
+        bundle = pickle.load(fh)
+    if not isinstance(bundle, dict):
+        return None
+    return bundle
+
+
+def heuristic_risk(features: dict[str, float]) -> float:
+    score = 0.05
+    score += min(0.4, 0.03 * features.get("count_10m_0_5km", 0))
+    score += min(0.3, 0.015 * features.get("count_10m_5_10km", 0))
+    score += min(0.2, 0.008 * features.get("count_20m_10_20km", 0))
+    score += min(0.2, 0.0006 * max(0.0, 600 - features.get("seconds_since_last_strike", 3600)))
+    score += min(0.2, 0.01 * max(0.0, features.get("rate_trend_5m_vs_20m", 0.0)))
+    return float(max(0.01, min(0.99, score)))
+
+
+def score_risk_probability(
+    rows: list[sqlite3.Row],
+    monitored_lat: float,
+    monitored_lng: float,
+    as_of_ts_ms: int,
+) -> dict[str, Any]:
+    features = build_risk_features(rows, monitored_lat, monitored_lng, as_of_ts_ms)
+    feature_keys, vector = risk_feature_vector(features)
+
+    bundle = load_risk_model_bundle()
+    if bundle and "model" in bundle and "feature_keys" in bundle:
+        model = bundle["model"]
+        trained_keys = bundle["feature_keys"]
+        row = np.array([features.get(key, 0.0) for key in trained_keys], dtype=float).reshape(1, -1)
+        probability = float(model.predict_proba(row)[0][1])
+        source = "trained-model"
+    else:
+        probability = heuristic_risk(features)
+        source = "heuristic-fallback"
+
+    return {
+        "probability": round(probability, 4),
+        "source": source,
+        "featureCount": len(feature_keys),
+        "features": features,
+    }
+
+
+def build_training_dataset(
+    rows: list[sqlite3.Row],
+    monitored_lat: float,
+    monitored_lng: float,
+    horizon_minutes: int,
+    radius_km: float,
+) -> tuple[np.ndarray, np.ndarray, list[str]]:
+    sorted_rows = sorted(rows, key=lambda r: int(r["strike_timestamp"]))
+    if len(sorted_rows) < 200:
+        raise ValueError("Need at least 200 strike rows for model training")
+
+    min_ts = int(sorted_rows[0]["strike_timestamp"])
+    max_ts = int(sorted_rows[-1]["strike_timestamp"])
+    step_ms = 60_000
+    start_ts = min_ts + 30 * 60 * 1000
+    end_ts = max_ts - horizon_minutes * 60 * 1000
+
+    x_rows: list[np.ndarray] = []
+    y_rows: list[int] = []
+    feature_keys: list[str] | None = None
+
+    ts = start_ts
+    while ts <= end_ts:
+        lookback_cutoff = ts - RISK_FEATURE_WINDOW_MINUTES * 60 * 1000
+        lookback_rows = [
+            row for row in sorted_rows
+            if lookback_cutoff <= int(row["strike_timestamp"]) <= ts
+        ]
+        future_rows = [
+            row for row in sorted_rows
+            if ts < int(row["strike_timestamp"]) <= ts + horizon_minutes * 60 * 1000
+        ]
+
+        if len(lookback_rows) < 20:
+            ts += step_ms
+            continue
+
+        label = 0
+        for row in future_rows:
+            dist = haversine_km(
+                monitored_lat,
+                monitored_lng,
+                float(row["lat"]),
+                float(row["lng"]),
+            )
+            if dist <= radius_km:
+                label = 1
+                break
+
+        features = build_risk_features(lookback_rows, monitored_lat, monitored_lng, ts)
+        keys, vector = risk_feature_vector(features)
+        if feature_keys is None:
+            feature_keys = keys
+        x_rows.append(vector)
+        y_rows.append(label)
+        ts += step_ms
+
+    if not x_rows or feature_keys is None:
+        raise ValueError("Unable to build training dataset")
+
+    X = np.vstack(x_rows)
+    y = np.array(y_rows, dtype=int)
+    return X, y, feature_keys
+
+
+def train_risk_model(
+    monitored_lat: float,
+    monitored_lng: float,
+    horizon_minutes: int,
+    radius_km: float,
+) -> dict[str, Any]:
+    rows = load_recent_samples(RISK_FEATURE_WINDOW_MINUTES * 4)
+    X, y, feature_keys = build_training_dataset(rows, monitored_lat, monitored_lng, horizon_minutes, radius_km)
+
+    split_idx = max(1, int(len(X) * 0.8))
+    X_train, X_valid = X[:split_idx], X[split_idx:]
+    y_train, y_valid = y[:split_idx], y[split_idx:]
+
+    if len(np.unique(y_train)) < 2:
+        raise ValueError("Training labels contain only one class; need more diverse weather periods")
+
+    base = GradientBoostingClassifier(random_state=42)
+    calibrated = CalibratedClassifierCV(base, method="isotonic", cv=3)
+    calibrated.fit(X_train, y_train)
+
+    valid_probs = calibrated.predict_proba(X_valid)[:, 1] if len(X_valid) > 0 else np.array([], dtype=float)
+    valid_preds = (valid_probs >= 0.5).astype(int) if len(valid_probs) > 0 else np.array([], dtype=int)
+
+    accuracy = float(np.mean(valid_preds == y_valid)) if len(y_valid) > 0 else None
+    base_rate = float(np.mean(y))
+
+    bundle = {
+        "model": calibrated,
+        "feature_keys": feature_keys,
+        "trained_at": datetime.now(tz=timezone.utc).isoformat(),
+        "horizon_minutes": horizon_minutes,
+        "radius_km": radius_km,
+        "rows": len(rows),
+        "samples": len(X),
+    }
+    with open(RISK_MODEL_PATH, "wb") as fh:
+        pickle.dump(bundle, fh)
+
+    return {
+        "ok": True,
+        "modelPath": RISK_MODEL_PATH,
+        "samples": int(len(X)),
+        "validationSamples": int(len(y_valid)),
+        "validationAccuracy": round(accuracy, 4) if accuracy is not None else None,
+        "baseRate": round(base_rate, 4),
+        "featureCount": len(feature_keys),
+        "horizonMinutes": horizon_minutes,
+        "radiusKm": radius_km,
+    }
 
 
 def utc_now_iso(timestamp_ms: int | None) -> str | None:
@@ -401,3 +640,35 @@ def ml_predict() -> dict[str, Any]:
         "windowMinutes": CLUSTER_WINDOW_MINUTES,
         **prediction,
     }
+
+
+@app.get("/ml/risk")
+def ml_risk(lat: float, lng: float) -> dict[str, Any]:
+    rows = load_recent_samples(RISK_FEATURE_WINDOW_MINUTES)
+    score = score_risk_probability(rows, lat, lng, now_ms())
+
+    probability = float(score["probability"])
+    if probability >= 0.7:
+        risk_level = "high"
+    elif probability >= 0.4:
+        risk_level = "moderate"
+    else:
+        risk_level = "low"
+
+    return {
+        "ready": True,
+        "horizonMinutes": RISK_HORIZON_MINUTES,
+        "radiusKm": RISK_RADIUS_KM,
+        "lat": lat,
+        "lng": lng,
+        "riskLevel": risk_level,
+        "strikeProbability": probability,
+        "modelSource": score["source"],
+        "featureCount": score["featureCount"],
+        "asOf": utc_now_iso(now_ms()),
+    }
+
+
+@app.post("/ml/train")
+def ml_train(lat: float, lng: float, horizon_minutes: int = RISK_HORIZON_MINUTES, radius_km: float = RISK_RADIUS_KM) -> dict[str, Any]:
+    return train_risk_model(lat, lng, horizon_minutes, radius_km)

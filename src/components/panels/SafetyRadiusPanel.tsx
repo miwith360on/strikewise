@@ -1,4 +1,4 @@
-import type { SafetyStatus, AlertConfig } from '@/services/lightning/types';
+import type { SafetyStatus, AlertConfig, LightningRiskNowcast } from '@/services/lightning/types';
 import { Card } from '@/components/ui/Card';
 import { SafetyBadge } from '@/components/ui/Badge';
 import { ShieldIcon } from '@/components/ui/Icons';
@@ -8,6 +8,7 @@ interface SafetyRadiusPanelProps {
   alertConfig: AlertConfig;
   regionalAlertText?: string | null;
   riskDriver?: string | null;
+  riskNowcast?: LightningRiskNowcast | null;
 }
 
 const levelMeta = {
@@ -78,8 +79,21 @@ export function SafetyRadiusPanel({
   alertConfig,
   regionalAlertText = null,
   riskDriver = null,
+  riskNowcast = null,
 }: SafetyRadiusPanelProps) {
   const meta = levelMeta[status.level];
+  const riskPercent = riskNowcast ? Math.max(2, Math.round(riskNowcast.strikeProbability * 100)) : 0;
+  const riskWidthClass = riskPercent >= 95
+    ? 'w-full'
+    : riskPercent >= 80
+      ? 'w-5/6'
+      : riskPercent >= 60
+        ? 'w-2/3'
+        : riskPercent >= 40
+          ? 'w-1/2'
+          : riskPercent >= 20
+            ? 'w-1/3'
+            : 'w-1/4';
 
   // Bars fill from outer in: caution, warning, danger
   const inCaution  = status.closestStrikeKm <= alertConfig.cautionRadiusKm;
@@ -133,6 +147,38 @@ export function SafetyRadiusPanel({
           <div className="flex items-center justify-between border-t border-storm-700 pt-3">
             <span className="text-xs text-storm-400 font-mono uppercase tracking-wider">Risk driver</span>
             <span className="max-w-[60%] text-right text-[11px] font-mono text-storm-200">{riskDriver}</span>
+          </div>
+        )}
+
+        {riskNowcast && (
+          <div className="space-y-2 border-t border-storm-700 pt-3">
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-storm-400 font-mono uppercase tracking-wider">ML nowcast</span>
+              <span className={`text-xs font-mono uppercase ${
+                riskNowcast.riskLevel === 'high'
+                  ? 'text-strike-danger'
+                  : riskNowcast.riskLevel === 'moderate'
+                    ? 'text-strike-warning'
+                    : 'text-strike-safe'
+              }`}>
+                {riskNowcast.riskLevel}
+              </span>
+            </div>
+            <div className="h-1.5 rounded-full bg-storm-700 overflow-hidden">
+              <div
+                className={`h-full rounded-full ${
+                  riskNowcast.riskLevel === 'high'
+                    ? 'bg-strike-danger'
+                    : riskNowcast.riskLevel === 'moderate'
+                      ? 'bg-strike-warning'
+                      : 'bg-strike-safe'
+                } ${riskWidthClass}`}
+              />
+            </div>
+            <div className="flex items-center justify-between text-[10px] font-mono text-storm-400">
+              <span>{Math.round(riskNowcast.strikeProbability * 100)}% in {riskNowcast.horizonMinutes}m</span>
+              <span>R {riskNowcast.radiusKm} km</span>
+            </div>
           </div>
         )}
 

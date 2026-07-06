@@ -60,6 +60,21 @@ export interface ThunderETAEntry {
   lng: number;
 }
 
+export type RiskLevel = 'low' | 'moderate' | 'high';
+
+export interface LightningRiskNowcast {
+  ready: boolean;
+  horizonMinutes: number;
+  radiusKm: number;
+  lat: number;
+  lng: number;
+  riskLevel: RiskLevel;
+  strikeProbability: number;
+  modelSource: string;
+  featureCount: number;
+  asOf: string | null;
+}
+
 // ── Safety ────────────────────────────────────────────────────────
 
 export type FeedStatus = 'connecting' | 'live' | 'unavailable' | 'demo';
@@ -127,6 +142,9 @@ export interface ILightningService {
 
   /** Optional backend sync for providers that maintain a monitored-point server-side. */
   setMonitoredPoint?(location: LatLng): Promise<void>;
+
+  /** Optional risk nowcast prediction for near-term strike probability. */
+  getRiskNowcast?(location: LatLng): Promise<LightningRiskNowcast | null>;
 
   /** Latest metadata returned alongside the most recent strike fetch. */
   getLatestMeta(): LightningFeedMeta | null;

@@ -29,6 +29,8 @@ const envSchema = z.object({
   XWEATHER_CLIENT_ID: z.string().optional(),
   XWEATHER_CLIENT_SECRET: z.string().optional(),
   TOMORROW_API_KEY: z.string().optional(),
+  ML_SERVICE_URL: z.string().url().default('http://localhost:5000'),
+  ML_REQUEST_TIMEOUT_MS: z.coerce.number().int().positive().default(8000),
 });
 
 const mergedEnv = {

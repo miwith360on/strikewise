@@ -3,6 +3,7 @@ import type {
   AlertConfig,
   FeedStatus,
   LightningFeedMeta,
+  LightningRiskNowcast,
   LightningStrike,
   MonitoredLocation,
   SafetyStatus,
@@ -41,6 +42,7 @@ export interface LightningFeedState {
   feedStatus: FeedStatus;
   feedMessage: string;
   feedMeta: LightningFeedMeta | null;
+  riskNowcast: LightningRiskNowcast | null;
   setAlertConfig: (cfg: AlertConfig) => void;
   setMonitoredLocation: (location: MonitoredLocation) => void;
 }
@@ -125,6 +127,7 @@ export function useLightningFeed(): LightningFeedState {
   const [feedStatus, setFeedStatus] = useState<FeedStatus>(
     lightningServiceMode === 'demo' ? 'demo' : 'connecting',
   );
+  const [riskNowcast, setRiskNowcast] = useState<LightningRiskNowcast | null>(null);
   const [feedMessage, setFeedMessage] = useState(
     lightningServiceMode === 'demo'
       ? 'Demo feed only'
@@ -136,12 +139,14 @@ export function useLightningFeed(): LightningFeedState {
   useEffect(() => {
     let cancelled = false;
     let unsub = () => {};
+    let riskTimer: ReturnType<typeof setTimeout> | null = null;
     const bounds = getBoundsForLocation(monitored);
 
     setNewestStrikeId(null);
     setIsLive(lightningServiceMode === 'demo');
     setFeedMeta(lightningService.getLatestMeta());
     setFeedStatus(lightningServiceMode === 'demo' ? 'demo' : 'connecting');
+    setRiskNowcast(null);
     setFeedMessage(
       lightningServiceMode === 'demo'
         ? 'Demo feed only'
@@ -154,6 +159,34 @@ export function useLightningFeed(): LightningFeedState {
         lng: monitored.lng,
       });
     }
+
+    const pollRisk = async () => {
+      if (!lightningService.getRiskNowcast) {
+        return;
+      }
+
+      try {
+        const nextRisk = await lightningService.getRiskNowcast({
+          lat: monitored.lat,
+          lng: monitored.lng,
+        });
+        if (!cancelled) {
+          setRiskNowcast(nextRisk);
+        }
+      } catch {
+        if (!cancelled) {
+          setRiskNowcast(null);
+        }
+      } finally {
+        if (!cancelled) {
+          riskTimer = setTimeout(() => {
+            void pollRisk();
+          }, 60_000);
+        }
+      }
+    };
+
+    void pollRisk();
 
     void lightningService.getRecentStrikes(bounds, QUERY_WINDOW_MINUTES)
       .then((initial) => {
@@ -214,6 +247,9 @@ export function useLightningFeed(): LightningFeedState {
     return () => {
       cancelled = true;
       unsub();
+      if (riskTimer) {
+        clearTimeout(riskTimer);
+      }
     };
   }, [monitored]);
 
@@ -242,6 +278,7 @@ export function useLightningFeed(): LightningFeedState {
     feedStatus,
     feedMessage,
     feedMeta,
+    riskNowcast,
     setAlertConfig,
     setMonitoredLocation,
   };

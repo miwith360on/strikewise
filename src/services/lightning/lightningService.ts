@@ -48,6 +48,10 @@ class MockLightningService implements ILightningService {
 
   // ── Public API ───────────────────────────────────────────────
 
+  async getRiskNowcast(_location: LatLng) {
+    return null;
+  }
+
   async setMonitoredPoint(_location: LatLng): Promise<void> {
     // Mock mode has no backend state to synchronize.
   }

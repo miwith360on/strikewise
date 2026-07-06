@@ -1,6 +1,7 @@
 import type { Request } from 'express';
 import { Router } from 'express';
 import { z } from 'zod';
+import { env } from '../config/env.js';
 import { enrichLightningResponse } from '../lib/lightningAnalysis.js';
 import type { BlitzortungFeedStrike, BlitzortungProvider } from '../lib/blitzortungProvider.js';
 import { createLightningProvider } from '../providers/index.js';
@@ -39,6 +40,11 @@ const querySchema = z.object({
 const monitoredPointSchema = z.object({
   lat: z.coerce.number().min(-90).max(90),
   lon: z.coerce.number().min(-180).max(180),
+});
+
+const riskQuerySchema = z.object({
+  lat: z.coerce.number().min(-90).max(90),
+  lng: z.coerce.number().min(-180).max(180),
 });
 
 function buildBounds(query: z.infer<typeof querySchema>): BoundingBox | undefined {
@@ -114,6 +120,29 @@ function toQueryKey(query: LightningQuery) {
     west: query.bounds?.west ?? null,
     minutes: query.minutes,
   });
+}
+
+async function fetchMlRisk(lat: number, lng: number) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), env.ML_REQUEST_TIMEOUT_MS);
+
+  try {
+    const params = new URLSearchParams({
+      lat: String(lat),
+      lng: String(lng),
+    });
+    const response = await fetch(`${env.ML_SERVICE_URL}/ml/risk?${params.toString()}`, {
+      signal: controller.signal,
+    });
+
+    if (!response.ok) {
+      throw new Error(`ML service responded ${response.status}`);
+    }
+
+    return await response.json();
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 async function getCachedOrFetch(query: LightningQuery, cacheKey: string): Promise<{
@@ -286,6 +315,16 @@ lightningRouter.post('/monitored-point', (request, response, next) => {
       monitoredPoint: body,
       blitzState: health.state,
     });
+  } catch (error) {
+    next(error);
+  }
+});
+
+lightningRouter.get('/risk', async (request, response, next) => {
+  try {
+    const query = riskQuerySchema.parse(request.query);
+    const risk = await fetchMlRisk(query.lat, query.lng);
+    response.json(risk);
   } catch (error) {
     next(error);
   }
