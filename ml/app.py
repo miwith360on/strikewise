@@ -15,6 +15,7 @@ from sklearn.calibration import CalibratedClassifierCV
 from sklearn.cluster import DBSCAN
 from sklearn.ensemble import GradientBoostingClassifier
 from sklearn.linear_model import LinearRegression
+from sklearn.metrics import roc_auc_score
 
 APP_DIR = os.path.dirname(__file__)
 DB_PATH = os.getenv("ML_DB_PATH", os.path.join(APP_DIR, "strikewise_ml.db"))
@@ -269,6 +270,94 @@ def train_risk_model(
         "featureCount": len(feature_keys),
         "horizonMinutes": horizon_minutes,
         "radiusKm": radius_km,
+    }
+
+
+def _classification_metrics(y_true: np.ndarray, probabilities: np.ndarray, threshold: float) -> dict[str, Any]:
+    preds = (probabilities >= threshold).astype(int)
+    tp = int(np.sum((preds == 1) & (y_true == 1)))
+    tn = int(np.sum((preds == 0) & (y_true == 0)))
+    fp = int(np.sum((preds == 1) & (y_true == 0)))
+    fn = int(np.sum((preds == 0) & (y_true == 1)))
+
+    precision = tp / (tp + fp) if (tp + fp) > 0 else 0.0
+    recall = tp / (tp + fn) if (tp + fn) > 0 else 0.0
+    f1 = (2 * precision * recall / (precision + recall)) if (precision + recall) > 0 else 0.0
+    accuracy = float(np.mean(preds == y_true)) if len(y_true) > 0 else 0.0
+    brier = float(np.mean((probabilities - y_true) ** 2)) if len(y_true) > 0 else 1.0
+
+    if len(np.unique(y_true)) >= 2:
+        roc_auc = float(roc_auc_score(y_true, probabilities))
+    else:
+        roc_auc = None
+
+    return {
+        "threshold": threshold,
+        "samples": int(len(y_true)),
+        "accuracy": round(accuracy, 4),
+        "precision": round(float(precision), 4),
+        "recall": round(float(recall), 4),
+        "f1": round(float(f1), 4),
+        "brier": round(float(brier), 4),
+        "rocAuc": round(roc_auc, 4) if roc_auc is not None else None,
+        "confusion": {
+            "tp": tp,
+            "tn": tn,
+            "fp": fp,
+            "fn": fn,
+        },
+    }
+
+
+def evaluate_risk_model(
+    monitored_lat: float,
+    monitored_lng: float,
+    horizon_minutes: int,
+    radius_km: float,
+    threshold: float,
+) -> dict[str, Any]:
+    rows = load_recent_samples(RISK_FEATURE_WINDOW_MINUTES * 4)
+    X, y, feature_keys = build_training_dataset(rows, monitored_lat, monitored_lng, horizon_minutes, radius_km)
+
+    split_idx = max(1, int(len(X) * 0.8))
+    X_valid = X[split_idx:]
+    y_valid = y[split_idx:]
+
+    if len(y_valid) == 0:
+        raise ValueError("Not enough holdout samples to evaluate; gather more history")
+
+    bundle = load_risk_model_bundle()
+    source = "heuristic-fallback"
+
+    if bundle and "model" in bundle and "feature_keys" in bundle:
+        source = "trained-model"
+        model = bundle["model"]
+        trained_keys: list[str] = bundle["feature_keys"]
+        idx_map = {key: idx for idx, key in enumerate(feature_keys)}
+        X_valid_aligned = np.column_stack([
+            X_valid[:, idx_map[key]] if key in idx_map else np.zeros(len(X_valid), dtype=float)
+            for key in trained_keys
+        ])
+        probs = model.predict_proba(X_valid_aligned)[:, 1]
+    else:
+        probs_list: list[float] = []
+        for row in X_valid:
+            feats = {key: float(row[idx]) for idx, key in enumerate(feature_keys)}
+            probs_list.append(heuristic_risk(feats))
+        probs = np.array(probs_list, dtype=float)
+
+    metrics = _classification_metrics(y_valid, probs, threshold)
+    base_rate = float(np.mean(y)) if len(y) > 0 else 0.0
+
+    return {
+        "ok": True,
+        "modelSource": source,
+        "samples": int(len(X)),
+        "validationSamples": int(len(y_valid)),
+        "baseRate": round(base_rate, 4),
+        "horizonMinutes": horizon_minutes,
+        "radiusKm": radius_km,
+        "metrics": metrics,
     }
 
 
@@ -623,6 +712,8 @@ def root() -> dict[str, Any]:
         "endpoints": {
             "status": "/ml/status",
             "predict": "/ml/predict",
+            "risk": "/ml/risk",
+            "evaluate": "/ml/evaluate",
         },
     }
 
@@ -672,3 +763,20 @@ def ml_risk(lat: float, lng: float) -> dict[str, Any]:
 @app.post("/ml/train")
 def ml_train(lat: float, lng: float, horizon_minutes: int = RISK_HORIZON_MINUTES, radius_km: float = RISK_RADIUS_KM) -> dict[str, Any]:
     return train_risk_model(lat, lng, horizon_minutes, radius_km)
+
+
+@app.get("/ml/evaluate")
+def ml_evaluate(
+    lat: float,
+    lng: float,
+    threshold: float = 0.5,
+    horizon_minutes: int = RISK_HORIZON_MINUTES,
+    radius_km: float = RISK_RADIUS_KM,
+) -> dict[str, Any]:
+    return evaluate_risk_model(
+        monitored_lat=lat,
+        monitored_lng=lng,
+        horizon_minutes=horizon_minutes,
+        radius_km=radius_km,
+        threshold=max(0.01, min(0.99, threshold)),
+    )

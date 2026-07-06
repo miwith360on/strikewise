@@ -47,6 +47,14 @@ const riskQuerySchema = z.object({
   lng: z.coerce.number().min(-180).max(180),
 });
 
+const riskEvalQuerySchema = z.object({
+  lat: z.coerce.number().min(-90).max(90),
+  lng: z.coerce.number().min(-180).max(180),
+  threshold: z.coerce.number().min(0.01).max(0.99).default(0.5),
+  horizonMinutes: z.coerce.number().int().min(1).max(60).default(10),
+  radiusKm: z.coerce.number().min(1).max(100).default(20),
+});
+
 function buildBounds(query: z.infer<typeof querySchema>): BoundingBox | undefined {
   if (
     query.north === undefined ||
@@ -132,6 +140,39 @@ async function fetchMlRisk(lat: number, lng: number) {
       lng: String(lng),
     });
     const response = await fetch(`${env.ML_SERVICE_URL}/ml/risk?${params.toString()}`, {
+      signal: controller.signal,
+    });
+
+    if (!response.ok) {
+      throw new Error(`ML service responded ${response.status}`);
+    }
+
+    return await response.json();
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function fetchMlRiskEvaluation(
+  lat: number,
+  lng: number,
+  threshold: number,
+  horizonMinutes: number,
+  radiusKm: number,
+) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), env.ML_REQUEST_TIMEOUT_MS);
+
+  try {
+    const params = new URLSearchParams({
+      lat: String(lat),
+      lng: String(lng),
+      threshold: String(threshold),
+      horizon_minutes: String(horizonMinutes),
+      radius_km: String(radiusKm),
+    });
+
+    const response = await fetch(`${env.ML_SERVICE_URL}/ml/evaluate?${params.toString()}`, {
       signal: controller.signal,
     });
 
@@ -325,6 +366,22 @@ lightningRouter.get('/risk', async (request, response, next) => {
     const query = riskQuerySchema.parse(request.query);
     const risk = await fetchMlRisk(query.lat, query.lng);
     response.json(risk);
+  } catch (error) {
+    next(error);
+  }
+});
+
+lightningRouter.get('/risk/evaluate', async (request, response, next) => {
+  try {
+    const query = riskEvalQuerySchema.parse(request.query);
+    const evaluation = await fetchMlRiskEvaluation(
+      query.lat,
+      query.lng,
+      query.threshold,
+      query.horizonMinutes,
+      query.radiusKm,
+    );
+    response.json(evaluation);
   } catch (error) {
     next(error);
   }
