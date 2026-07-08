@@ -16,6 +16,7 @@ import type { NwsAlert } from '@/hooks/useNwsAlerts';
 const MAX_DANGER_RADIUS_KM = 20;
 const MAX_WARNING_RADIUS_KM = 40;
 const MAX_CAUTION_RADIUS_KM = 80;
+const MOBILE_FOCUS_STORAGE_KEY = 'strikewise:mobile-focus-mode';
 
 function formatCoordinate(value: number, positiveLabel: string, negativeLabel: string) {
   const abs = Math.abs(value).toFixed(4);
@@ -313,6 +314,7 @@ export default function DashboardPage() {
   const { location, gpsLoading, gpsError, requestGPS, setManualLocation } = useSelectedLocation();
   const [selectedStrikeId, setSelectedStrikeId] = useState<string | null>(null);
   const [dismissedAlertIds, setDismissedAlertIds] = useState<Set<string>>(() => new Set());
+  const [mobileFocusMode, setMobileFocusMode] = useState(false);
 
   const nwsAlerts = useNwsAlerts(location);
   const visibleAlerts = nwsAlerts.alerts.filter((a) => !dismissedAlertIds.has(a.id));
@@ -340,6 +342,17 @@ export default function DashboardPage() {
       return next.size === prev.size ? prev : next;
     });
   }, [nwsAlerts.alerts]);
+
+  useEffect(() => {
+    try {
+      const raw = window.localStorage.getItem(MOBILE_FOCUS_STORAGE_KEY);
+      if (raw === '1') {
+        setMobileFocusMode(true);
+      }
+    } catch {
+      // Ignore storage access errors.
+    }
+  }, []);
 
   useEffect(() => {
     if (selectedStrikeId && !strikes.some((strike) => strike.id === selectedStrikeId)) {
@@ -412,6 +425,15 @@ export default function DashboardPage() {
 
   const isInitialLoading = feedStatus === 'connecting' && strikes.length === 0;
 
+  const setFocusMode = (enabled: boolean) => {
+    setMobileFocusMode(enabled);
+    try {
+      window.localStorage.setItem(MOBILE_FOCUS_STORAGE_KEY, enabled ? '1' : '0');
+    } catch {
+      // Ignore storage access errors.
+    }
+  };
+
   return (
     <div className="flex min-h-screen flex-col overflow-x-hidden bg-storm-950">
       {/* Sticky header */}
@@ -451,7 +473,9 @@ export default function DashboardPage() {
         <div className="flex min-h-0 flex-1 flex-col overflow-y-auto lg:overflow-hidden">
           <AreaRiskBanner status={effectiveSafetyStatus} />
 
-          <div className="relative h-[44vh] min-h-[18rem] max-w-full flex-shrink-0 bg-storm-950 lg:h-auto lg:min-h-0 lg:flex-1">
+          <div className={`relative max-w-full flex-shrink-0 bg-storm-950 lg:h-auto lg:min-h-0 lg:flex-1 ${
+            mobileFocusMode ? 'h-[62vh] min-h-[24rem]' : 'h-[44vh] min-h-[18rem]'
+          }`}>
             <LightningMap
               strikes={strikes}
               monitored={alertConfig.monitored}
@@ -506,13 +530,42 @@ export default function DashboardPage() {
           </div>
 
           <div className="sticky bottom-0 z-30 flex flex-col gap-3 rounded-t-3xl border-t border-storm-700 bg-storm-950/98 p-3 shadow-[0_-12px_40px_rgba(0,0,0,0.45)] backdrop-blur-lg lg:hidden">
-            <MapStrikeInspector
-              strike={selectedStrike}
-              monitored={alertConfig.monitored}
-              onClose={() => setSelectedStrikeId(null)}
-            />
+            <div className="flex items-center justify-between rounded-xl border border-storm-700 bg-storm-900/50 px-3 py-2">
+              <div>
+                <div className="text-[10px] font-mono uppercase tracking-widest text-storm-400">Mobile view</div>
+                <div className="text-xs text-storm-300">{mobileFocusMode ? 'Focus mode on' : 'Full mode'}</div>
+              </div>
+              <div className="flex items-center rounded-lg border border-storm-700 overflow-hidden">
+                <button
+                  type="button"
+                  onClick={() => setFocusMode(true)}
+                  className={`px-3 py-1.5 text-[11px] font-mono uppercase tracking-wider transition-colors ${
+                    mobileFocusMode ? 'bg-bolt-500 text-storm-950' : 'text-storm-300 bg-transparent'
+                  }`}
+                >
+                  Focus
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFocusMode(false)}
+                  className={`px-3 py-1.5 text-[11px] font-mono uppercase tracking-wider transition-colors ${
+                    mobileFocusMode ? 'text-storm-300 bg-transparent' : 'bg-storm-700 text-storm-50'
+                  }`}
+                >
+                  Full
+                </button>
+              </div>
+            </div>
 
-            <ThunderETAPanel etas={thunderETAs} />
+            {!mobileFocusMode && (
+              <MapStrikeInspector
+                strike={selectedStrike}
+                monitored={alertConfig.monitored}
+                onClose={() => setSelectedStrikeId(null)}
+              />
+            )}
+
+            {!mobileFocusMode && <ThunderETAPanel etas={thunderETAs} />}
 
             <SafetyRadiusPanel
               status={effectiveSafetyStatus}
@@ -522,21 +575,25 @@ export default function DashboardPage() {
               riskNowcast={riskNowcast}
             />
 
-            <StrikeStatsPanel
-              strikes={strikes}
-              isLive={isLive}
-              feedStatus={feedStatus}
-              feedMeta={feedMeta}
-              onExpandRadius={handleExpandRadius}
-              canExpandRadius={canExpandRadius}
-            />
+            {!mobileFocusMode && (
+              <StrikeStatsPanel
+                strikes={strikes}
+                isLive={isLive}
+                feedStatus={feedStatus}
+                feedMeta={feedMeta}
+                onExpandRadius={handleExpandRadius}
+                canExpandRadius={canExpandRadius}
+              />
+            )}
 
-            <details className="rounded-2xl border border-storm-700 bg-storm-900/35 px-3 py-2">
-              <summary className="cursor-pointer list-none text-[10px] font-mono uppercase tracking-widest text-storm-400">
-                Feed Diagnostics
-              </summary>
-              <div className="mt-2">{feedDiagnostics}</div>
-            </details>
+            {!mobileFocusMode && (
+              <details className="rounded-2xl border border-storm-700 bg-storm-900/35 px-3 py-2">
+                <summary className="cursor-pointer list-none text-[10px] font-mono uppercase tracking-widest text-storm-400">
+                  Feed Diagnostics
+                </summary>
+                <div className="mt-2">{feedDiagnostics}</div>
+              </details>
+            )}
           </div>
         </div>
 
