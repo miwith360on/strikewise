@@ -229,43 +229,45 @@ def explain_risk_features(features: dict[str, float]) -> tuple[str, list[str]]:
     positive_ratio = features.get("positive_ratio_10m", 0.0)
 
     if close_5km >= 2:
-        drivers.append("multiple very close strikes in the last 10 minutes")
+        drivers.append("multiple strikes within 5 km in the last 10 minutes")
     elif close_5km >= 1:
-        drivers.append("a strike occurred within 5 km in the last 10 minutes")
+        drivers.append("a strike within 5 km in the last 10 minutes")
 
     if close_10km >= 2:
-        drivers.append("strike density is building within 10 km")
+        drivers.append("strike density building within 10 km")
     elif close_10km >= 1:
-        drivers.append("recent lightning is active within 10 km")
+        drivers.append("recent lightning within 10 km")
 
     if medium_20km >= 3:
-        drivers.append("an active lightning core is present within 20 km")
+        drivers.append("an active lightning core within 20 km")
 
     if recent_10km_age <= 300:
-        drivers.append("nearby lightning occurred in the last 5 minutes")
+        drivers.append("nearby lightning in the last 5 minutes")
 
     if approach_delta >= 3:
-        drivers.append("the strike cluster is moving closer")
+        drivers.append("the strike cluster moving closer")
     elif approach_delta <= -3:
-        drivers.append("the strike cluster is drifting farther away")
+        drivers.append("the strike cluster drifting farther away")
 
     if rate_delta >= 2:
-        drivers.append("strike rate is accelerating")
+        drivers.append("strike rate accelerating")
     elif rate_delta <= -2:
-        drivers.append("strike rate is easing")
+        drivers.append("strike rate easing")
 
     if pressure >= 1.2:
-        drivers.append("lightning pressure near the monitored point is elevated")
+        drivers.append("elevated lightning pressure near the monitored point")
 
     if positive_ratio >= 0.4 and (close_5km + close_10km) > 0:
-        drivers.append("a higher share of nearby strikes are positive polarity")
+        drivers.append("more nearby positive-polarity strikes")
 
     if not drivers:
-        drivers.append("recent nearby lightning activity is limited")
+        explanation = "Nearby lightning activity is limited."
+        return explanation, ["nearby lightning activity is limited"]
 
-    explanation = drivers[0]
-    if len(drivers) > 1:
-        explanation = f"{drivers[0]}; {drivers[1]}"
+    if len(drivers) == 1:
+        explanation = f"Short-term risk is being driven by {drivers[0]}."
+    else:
+        explanation = f"Short-term risk is being driven by {drivers[0]} and {drivers[1]}."
 
     return explanation, drivers[:4]
 

@@ -181,7 +181,7 @@ export function SafetyRadiusPanel({
             </div>
             {riskNowcast.explanation && (
               <p className="text-xs leading-relaxed text-storm-300">
-                {riskNowcast.explanation}.
+                {riskNowcast.explanation}
               </p>
             )}
             {riskNowcast.drivers && riskNowcast.drivers.length > 0 && (
