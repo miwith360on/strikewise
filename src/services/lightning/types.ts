@@ -72,6 +72,8 @@ export interface LightningRiskNowcast {
   strikeProbability: number;
   modelSource: string;
   featureCount: number;
+  explanation?: string;
+  drivers?: string[];
   asOf: string | null;
 }
 

@@ -181,6 +181,10 @@ export class HttpLightningService implements ILightningService {
       strikeProbability: raw.strikeProbability,
       modelSource: raw.modelSource,
       featureCount: raw.featureCount,
+      explanation: typeof raw.explanation === 'string' ? raw.explanation : undefined,
+      drivers: Array.isArray(raw.drivers)
+        ? raw.drivers.filter((value): value is string => typeof value === 'string')
+        : undefined,
       asOf: typeof raw.asOf === 'string' ? raw.asOf : null,
     };
   }

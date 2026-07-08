@@ -54,51 +54,131 @@ def haversine_km(lat1: float, lng1: float, lat2: float, lng2: float) -> float:
     return 2 * earth_r * math.asin(math.sqrt(a))
 
 
+def row_timestamp_ms(row: sqlite3.Row) -> int:
+    return int(row["strike_timestamp"])
+
+
+def row_distance_km(row: sqlite3.Row, monitored_lat: float, monitored_lng: float) -> float:
+    return haversine_km(
+        monitored_lat,
+        monitored_lng,
+        float(row["lat"]),
+        float(row["lng"]),
+    )
+
+
+def centroid_distance_km(
+    rows: list[sqlite3.Row],
+    monitored_lat: float,
+    monitored_lng: float,
+) -> float:
+    if not rows:
+        return 999.0
+
+    centroid_lat = sum(float(row["lat"]) for row in rows) / len(rows)
+    centroid_lng = sum(float(row["lng"]) for row in rows) / len(rows)
+    return haversine_km(monitored_lat, monitored_lng, centroid_lat, centroid_lng)
+
+
+def previous_window_rows(
+    rows: list[sqlite3.Row],
+    as_of_ts_ms: int,
+    window_minutes: int,
+) -> list[sqlite3.Row]:
+    prev_end = as_of_ts_ms - window_minutes * 60 * 1000
+    prev_start = prev_end - window_minutes * 60 * 1000
+    return [
+        row for row in rows
+        if prev_start <= row_timestamp_ms(row) < prev_end
+    ]
+
+
 def build_risk_features(
     rows: list[sqlite3.Row],
     monitored_lat: float,
     monitored_lng: float,
     as_of_ts_ms: int,
 ) -> dict[str, float]:
-    windows_min = [5, 10, 20, 30]
+    windows_min = [5, 10, 20, 30, 45, 60]
     rings_km: list[tuple[float, float]] = [(0, 5), (5, 10), (10, 20), (20, 40)]
     features: dict[str, float] = {}
 
+    history_rows = [row for row in rows if row_timestamp_ms(row) <= as_of_ts_ms]
+    history_distances = [row_distance_km(row, monitored_lat, monitored_lng) for row in history_rows]
+
     for window in windows_min:
         cutoff = as_of_ts_ms - window * 60 * 1000
-        window_rows = [row for row in rows if int(row["strike_timestamp"]) >= cutoff]
+        window_rows = [row for row in history_rows if row_timestamp_ms(row) >= cutoff]
+        distances = [row_distance_km(row, monitored_lat, monitored_lng) for row in window_rows]
         features[f"count_{window}m"] = float(len(window_rows))
 
         if window_rows:
             avg_intensity = sum(float(row["intensity"]) for row in window_rows) / len(window_rows)
             features[f"avg_intensity_{window}m"] = float(avg_intensity)
+            features[f"closest_{window}m_km"] = float(min(distances))
+            features[f"mean_distance_{window}m_km"] = float(sum(distances) / len(distances))
+            features[f"distance_std_{window}m_km"] = float(np.std(np.array(distances, dtype=float)))
+            positive_count = sum(1 for row in window_rows if str(row["polarity"]) == "positive")
+            features[f"positive_ratio_{window}m"] = float(positive_count / len(window_rows))
+            features[f"nearby_pressure_{window}m"] = float(sum(1.0 / max(1.0, dist) for dist in distances))
+            centroid_dist = centroid_distance_km(window_rows, monitored_lat, monitored_lng)
+            features[f"centroid_distance_{window}m_km"] = float(centroid_dist)
         else:
             features[f"avg_intensity_{window}m"] = 0.0
+            features[f"closest_{window}m_km"] = 999.0
+            features[f"mean_distance_{window}m_km"] = 999.0
+            features[f"distance_std_{window}m_km"] = 0.0
+            features[f"positive_ratio_{window}m"] = 0.0
+            features[f"nearby_pressure_{window}m"] = 0.0
+            features[f"centroid_distance_{window}m_km"] = 999.0
+
+        prev_rows = previous_window_rows(history_rows, as_of_ts_ms, window)
+        prev_count = float(len(prev_rows))
+        prev_distances = [row_distance_km(row, monitored_lat, monitored_lng) for row in prev_rows]
+        features[f"count_delta_{window}m"] = float(len(window_rows) - prev_count)
+        features[f"count_ratio_{window}m"] = float(len(window_rows) / max(1.0, prev_count))
+        if prev_distances and distances:
+            features[f"approach_delta_{window}m_km"] = float((sum(prev_distances) / len(prev_distances)) - (sum(distances) / len(distances)))
+        else:
+            features[f"approach_delta_{window}m_km"] = 0.0
 
         for ring_start, ring_end in rings_km:
             key = f"count_{window}m_{int(ring_start)}_{int(ring_end)}km"
             count = 0
-            for row in window_rows:
-                dist = haversine_km(
-                    monitored_lat,
-                    monitored_lng,
-                    float(row["lat"]),
-                    float(row["lng"]),
-                )
+            weighted_intensity = 0.0
+            for row, dist in zip(window_rows, distances, strict=True):
                 if ring_start <= dist < ring_end:
                     count += 1
+                    weighted_intensity += float(row["intensity"])
             features[key] = float(count)
+            features[f"intensity_{window}m_{int(ring_start)}_{int(ring_end)}km"] = float(weighted_intensity)
 
     past_5m = features["count_5m"]
     past_20m = features["count_20m"]
     features["rate_trend_5m_vs_20m"] = float((past_5m * 4) - past_20m)
+    features["close_rate_bias"] = float(features["count_10m_0_5km"] + features["count_10m_5_10km"] - features["count_10m_20_40km"])
+    features["intensity_trend_10m_vs_30m"] = float(features["avg_intensity_10m"] - features["avg_intensity_30m"])
 
-    history_rows = [row for row in rows if int(row["strike_timestamp"]) <= as_of_ts_ms]
     if history_rows:
-        latest = max(int(row["strike_timestamp"]) for row in history_rows)
+        latest = max(row_timestamp_ms(row) for row in history_rows)
         features["seconds_since_last_strike"] = float(max(0, (as_of_ts_ms - latest) // 1000))
+        nearby_10km = [row for row, dist in zip(history_rows, history_distances, strict=True) if dist <= 10]
+        nearby_20km = [row for row, dist in zip(history_rows, history_distances, strict=True) if dist <= 20]
+        if nearby_10km:
+            latest_10km = max(row_timestamp_ms(row) for row in nearby_10km)
+            features["seconds_since_last_10km_strike"] = float(max(0, (as_of_ts_ms - latest_10km) // 1000))
+        else:
+            features["seconds_since_last_10km_strike"] = float(24 * 60 * 60)
+
+        if nearby_20km:
+            latest_20km = max(row_timestamp_ms(row) for row in nearby_20km)
+            features["seconds_since_last_20km_strike"] = float(max(0, (as_of_ts_ms - latest_20km) // 1000))
+        else:
+            features["seconds_since_last_20km_strike"] = float(24 * 60 * 60)
     else:
         features["seconds_since_last_strike"] = float(24 * 60 * 60)
+        features["seconds_since_last_10km_strike"] = float(24 * 60 * 60)
+        features["seconds_since_last_20km_strike"] = float(24 * 60 * 60)
 
     return features
 
@@ -126,7 +206,68 @@ def heuristic_risk(features: dict[str, float]) -> float:
     score += min(0.2, 0.008 * features.get("count_20m_10_20km", 0))
     score += min(0.2, 0.0006 * max(0.0, 600 - features.get("seconds_since_last_strike", 3600)))
     score += min(0.2, 0.01 * max(0.0, features.get("rate_trend_5m_vs_20m", 0.0)))
+    score += min(0.15, 0.015 * max(0.0, features.get("approach_delta_10m_km", 0.0)))
+    score += min(0.1, 0.02 * max(0.0, features.get("count_delta_10m", 0.0)))
+    score += min(0.1, 0.03 * features.get("nearby_pressure_10m", 0.0))
+    if features.get("closest_10m_km", 999.0) <= 10:
+        score += 0.08
+    if features.get("seconds_since_last_10km_strike", 86400.0) <= 300:
+        score += 0.08
     return float(max(0.01, min(0.99, score)))
+
+
+def explain_risk_features(features: dict[str, float]) -> tuple[str, list[str]]:
+    drivers: list[str] = []
+
+    close_5km = features.get("count_10m_0_5km", 0.0)
+    close_10km = features.get("count_10m_5_10km", 0.0)
+    medium_20km = features.get("count_20m_10_20km", 0.0)
+    recent_10km_age = features.get("seconds_since_last_10km_strike", 86400.0)
+    approach_delta = features.get("approach_delta_10m_km", 0.0)
+    rate_delta = features.get("count_delta_10m", 0.0)
+    pressure = features.get("nearby_pressure_10m", 0.0)
+    positive_ratio = features.get("positive_ratio_10m", 0.0)
+
+    if close_5km >= 2:
+        drivers.append("multiple very close strikes in the last 10 minutes")
+    elif close_5km >= 1:
+        drivers.append("a strike occurred within 5 km in the last 10 minutes")
+
+    if close_10km >= 2:
+        drivers.append("strike density is building within 10 km")
+    elif close_10km >= 1:
+        drivers.append("recent lightning is active within 10 km")
+
+    if medium_20km >= 3:
+        drivers.append("an active lightning core is present within 20 km")
+
+    if recent_10km_age <= 300:
+        drivers.append("nearby lightning occurred in the last 5 minutes")
+
+    if approach_delta >= 3:
+        drivers.append("the strike cluster is moving closer")
+    elif approach_delta <= -3:
+        drivers.append("the strike cluster is drifting farther away")
+
+    if rate_delta >= 2:
+        drivers.append("strike rate is accelerating")
+    elif rate_delta <= -2:
+        drivers.append("strike rate is easing")
+
+    if pressure >= 1.2:
+        drivers.append("lightning pressure near the monitored point is elevated")
+
+    if positive_ratio >= 0.4 and (close_5km + close_10km) > 0:
+        drivers.append("a higher share of nearby strikes are positive polarity")
+
+    if not drivers:
+        drivers.append("recent nearby lightning activity is limited")
+
+    explanation = drivers[0]
+    if len(drivers) > 1:
+        explanation = f"{drivers[0]}; {drivers[1]}"
+
+    return explanation, drivers[:4]
 
 
 def score_risk_probability(
@@ -149,11 +290,15 @@ def score_risk_probability(
         probability = heuristic_risk(features)
         source = "heuristic-fallback"
 
+    explanation, drivers = explain_risk_features(features)
+
     return {
         "probability": round(probability, 4),
         "source": source,
         "featureCount": len(feature_keys),
         "features": features,
+        "explanation": explanation,
+        "drivers": drivers,
     }
 
 
@@ -756,6 +901,8 @@ def ml_risk(lat: float, lng: float) -> dict[str, Any]:
         "strikeProbability": probability,
         "modelSource": score["source"],
         "featureCount": score["featureCount"],
+        "explanation": score["explanation"],
+        "drivers": score["drivers"],
         "asOf": utc_now_iso(now_ms()),
     }
 

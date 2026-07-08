@@ -179,6 +179,23 @@ export function SafetyRadiusPanel({
               <span>{Math.round(riskNowcast.strikeProbability * 100)}% in {riskNowcast.horizonMinutes}m</span>
               <span>R {riskNowcast.radiusKm} km</span>
             </div>
+            {riskNowcast.explanation && (
+              <p className="text-xs leading-relaxed text-storm-300">
+                {riskNowcast.explanation}.
+              </p>
+            )}
+            {riskNowcast.drivers && riskNowcast.drivers.length > 0 && (
+              <div className="flex flex-wrap gap-1.5 pt-1">
+                {riskNowcast.drivers.slice(0, 3).map((driver) => (
+                  <span
+                    key={driver}
+                    className="rounded-full border border-storm-700 bg-storm-900/60 px-2 py-1 text-[10px] font-mono text-storm-300"
+                  >
+                    {driver}
+                  </span>
+                ))}
+              </div>
+            )}
           </div>
         )}
 
