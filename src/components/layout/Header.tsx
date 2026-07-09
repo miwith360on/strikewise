@@ -159,8 +159,9 @@ export function Header({
           size="sm"
           onClick={onRequestGPS}
           disabled={gpsLoading}
-          className="px-2 py-1.5 text-xs"
+          className="min-h-10 min-w-10 px-2 text-xs"
           title="Use my location"
+          aria-label="Use my current location"
         >
           <LocationIcon className="w-3.5 h-3.5" />
         </Button>

@@ -25,6 +25,16 @@ const levelTextColor = {
   danger: 'text-strike-danger',
 } as const;
 
+function nowcastConfidence(probability: number): { label: string; className: string } {
+  if (probability >= 0.75) {
+    return { label: 'High confidence', className: 'text-strike-danger' };
+  }
+  if (probability >= 0.45) {
+    return { label: 'Moderate confidence', className: 'text-strike-warning' };
+  }
+  return { label: 'Lower confidence', className: 'text-storm-400' };
+}
+
 function TrendArrow({ trend }: { trend: SafetyStatus['changeRate'] }) {
   if (trend === 'approaching') {
     return (
@@ -83,6 +93,7 @@ export function SafetyRadiusPanel({
 }: SafetyRadiusPanelProps) {
   const meta = levelMeta[status.level];
   const riskPercent = riskNowcast ? Math.max(2, Math.round(riskNowcast.strikeProbability * 100)) : 0;
+  const confidence = riskNowcast ? nowcastConfidence(riskNowcast.strikeProbability) : null;
   const riskWidthClass = riskPercent >= 95
     ? 'w-full'
     : riskPercent >= 80
@@ -179,6 +190,12 @@ export function SafetyRadiusPanel({
               <span>{Math.round(riskNowcast.strikeProbability * 100)}% in {riskNowcast.horizonMinutes}m</span>
               <span>R {riskNowcast.radiusKm} km</span>
             </div>
+            {confidence && (
+              <div className="flex items-center justify-between text-[10px] font-mono">
+                <span className="text-storm-500 uppercase tracking-wider">Confidence</span>
+                <span className={confidence.className}>{confidence.label}</span>
+              </div>
+            )}
             {riskNowcast.explanation && (
               <p className="text-xs leading-relaxed text-storm-300">
                 {riskNowcast.explanation}

@@ -254,7 +254,7 @@ function NwsAlertBanner({ headline, severity, event, onDismiss }: {
         type="button"
         onClick={onDismiss}
         aria-label="Dismiss alert"
-        className="flex-shrink-0 text-storm-400 hover:text-storm-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-bolt-500 transition-colors text-base leading-none"
+        className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-md text-storm-400 hover:text-storm-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-bolt-500 transition-colors text-base leading-none"
       >
         ×
       </button>
@@ -534,7 +534,7 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          <div className="sticky bottom-0 z-30 flex flex-col gap-3 rounded-t-3xl border-t border-storm-700 bg-storm-950/98 p-3 shadow-[0_-12px_40px_rgba(0,0,0,0.45)] backdrop-blur-lg lg:hidden">
+          <div className="sticky bottom-0 z-30 flex flex-col gap-3 rounded-t-3xl border-t border-storm-700 bg-storm-950/98 px-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3 shadow-[0_-12px_40px_rgba(0,0,0,0.45)] backdrop-blur-lg lg:hidden">
             <div className="flex items-center justify-between rounded-xl border border-storm-700 bg-storm-900/50 px-3 py-2">
               <div>
                 <div className="text-[10px] font-mono uppercase tracking-widest text-storm-400">Mobile view</div>
@@ -546,7 +546,7 @@ export default function DashboardPage() {
                   onClick={() => setFocusMode(true)}
                   aria-pressed={mobileFocusMode}
                   aria-label="Enable focus mode"
-                  className={`px-3 py-1.5 text-[11px] font-mono uppercase tracking-wider transition-colors ${
+                  className={`min-h-10 px-4 py-2 text-[11px] font-mono uppercase tracking-wider focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-bolt-500 transition-colors ${
                     mobileFocusMode ? 'bg-bolt-500 text-storm-950' : 'text-storm-300 bg-transparent'
                   }`}
                 >
@@ -557,7 +557,7 @@ export default function DashboardPage() {
                   onClick={() => setFocusMode(false)}
                   aria-pressed={!mobileFocusMode}
                   aria-label="Enable full mode"
-                  className={`px-3 py-1.5 text-[11px] font-mono uppercase tracking-wider transition-colors ${
+                  className={`min-h-10 px-4 py-2 text-[11px] font-mono uppercase tracking-wider focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-bolt-500 transition-colors ${
                     mobileFocusMode ? 'text-storm-300 bg-transparent' : 'bg-storm-700 text-storm-50'
                   }`}
                 >
@@ -597,7 +597,7 @@ export default function DashboardPage() {
 
             {!mobileFocusMode && (
               <details className="rounded-2xl border border-storm-700 bg-storm-900/35 px-3 py-2">
-                <summary className="cursor-pointer list-none text-[10px] font-mono uppercase tracking-widest text-storm-400">
+                <summary className="cursor-pointer list-none rounded-md px-1 py-1.5 text-[10px] font-mono uppercase tracking-widest text-storm-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-bolt-500">
                   Feed Diagnostics
                 </summary>
                 <div className="mt-2">{feedDiagnostics}</div>
