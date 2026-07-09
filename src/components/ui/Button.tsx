@@ -7,17 +7,17 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 }
 
 const base =
-  'inline-flex items-center justify-center gap-2 rounded-xl font-display font-semibold transition-all duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-bolt-500 disabled:opacity-40 disabled:cursor-not-allowed select-none';
+  'inline-flex items-center justify-center gap-2 rounded-xl font-display font-semibold transition-[transform,background-color,border-color,color,box-shadow] duration-200 ease-out focus:outline-none focus-visible:ring-2 focus-visible:ring-bolt-500 disabled:opacity-40 disabled:cursor-not-allowed select-none will-change-transform';
 
 const variants: Record<NonNullable<ButtonProps['variant']>, string> = {
   primary:
-    'bg-bolt-500 text-storm-950 hover:bg-bolt-400 active:scale-95 shadow-bolt focus-visible:ring-bolt-400',
+    'bg-bolt-500 text-storm-950 hover:bg-bolt-400 active:scale-[0.98] shadow-bolt focus-visible:ring-bolt-400',
   ghost:
-    'bg-transparent text-bolt-500 hover:bg-storm-700 active:scale-95',
+    'bg-transparent text-bolt-500 hover:bg-storm-700 active:scale-[0.98]',
   danger:
-    'bg-strike-danger/10 text-strike-danger border border-strike-danger/30 hover:bg-strike-danger/20 active:scale-95',
+    'bg-strike-danger/10 text-strike-danger border border-strike-danger/30 hover:bg-strike-danger/20 active:scale-[0.98]',
   outline:
-    'bg-transparent text-storm-400 border border-storm-600 hover:border-bolt-500 hover:text-bolt-500 active:scale-95',
+    'bg-transparent text-storm-400 border border-storm-600 hover:border-bolt-500 hover:text-bolt-500 active:scale-[0.98]',
 };
 
 const sizes: Record<NonNullable<ButtonProps['size']>, string> = {

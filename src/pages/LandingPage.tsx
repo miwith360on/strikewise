@@ -41,14 +41,13 @@ interface FeatureCardProps {
   icon: React.ReactNode;
   title: string;
   desc: string;
-  delay: string;
+  delayClassName: string;
 }
 
-function FeatureCard({ icon, title, desc, delay }: FeatureCardProps) {
+function FeatureCard({ icon, title, desc, delayClassName }: FeatureCardProps) {
   return (
     <div
-      className="glass-card border border-white/5 p-5 flex flex-col gap-3 animate-slide-up"
-      style={{ animationDelay: delay, animationFillMode: 'both' }}
+      className={`glass-card border border-white/5 p-5 flex flex-col gap-3 animate-slide-up will-change-transform ${delayClassName}`}
     >
       <div className="w-10 h-10 rounded-xl bg-storm-700 flex items-center justify-center text-bolt-500">
         {icon}
@@ -63,30 +62,27 @@ function FeatureCard({ icon, title, desc, delay }: FeatureCardProps) {
 
 // ── Particle dots background ──────────────────────────────────────
 function ParticleDots() {
-  const dots = Array.from({ length: 40 }, (_, i) => ({
-    id: i,
-    top: `${Math.random() * 100}%`,
-    left: `${Math.random() * 100}%`,
-    opacity: 0.05 + Math.random() * 0.12,
-    size: 1 + Math.random() * 2,
-    delay: `${Math.random() * 4}s`,
-  }));
+  const dots = [
+    'top-[8%] left-[12%] w-[2px] h-[2px] opacity-[0.08] [animation-delay:0.2s] [animation-duration:3.2s]',
+    'top-[14%] left-[78%] w-[1px] h-[1px] opacity-[0.11] [animation-delay:1.4s] [animation-duration:4s]',
+    'top-[22%] left-[34%] w-[2px] h-[2px] opacity-[0.09] [animation-delay:0.9s] [animation-duration:3.6s]',
+    'top-[31%] left-[62%] w-[1px] h-[1px] opacity-[0.12] [animation-delay:2.1s] [animation-duration:4.4s]',
+    'top-[41%] left-[18%] w-[2px] h-[2px] opacity-[0.07] [animation-delay:0.6s] [animation-duration:3.8s]',
+    'top-[48%] left-[86%] w-[1px] h-[1px] opacity-[0.1] [animation-delay:1.9s] [animation-duration:4.2s]',
+    'top-[56%] left-[44%] w-[2px] h-[2px] opacity-[0.09] [animation-delay:2.6s] [animation-duration:3.5s]',
+    'top-[63%] left-[72%] w-[1px] h-[1px] opacity-[0.08] [animation-delay:1.1s] [animation-duration:4.1s]',
+    'top-[71%] left-[27%] w-[2px] h-[2px] opacity-[0.11] [animation-delay:3.1s] [animation-duration:3.7s]',
+    'top-[79%] left-[55%] w-[1px] h-[1px] opacity-[0.08] [animation-delay:2.4s] [animation-duration:4.3s]',
+    'top-[87%] left-[9%] w-[2px] h-[2px] opacity-[0.1] [animation-delay:0.3s] [animation-duration:3.9s]',
+    'top-[92%] left-[88%] w-[1px] h-[1px] opacity-[0.07] [animation-delay:1.7s] [animation-duration:4.5s]',
+  ];
 
   return (
     <div className="absolute inset-0 overflow-hidden pointer-events-none" aria-hidden="true">
-      {dots.map((d) => (
+      {dots.map((className, index) => (
         <span
-          key={d.id}
-          className="absolute rounded-full bg-bolt-500 animate-pulse"
-          style={{
-            top: d.top,
-            left: d.left,
-            opacity: d.opacity,
-            width: d.size,
-            height: d.size,
-            animationDelay: d.delay,
-            animationDuration: `${2 + Math.random() * 3}s`,
-          }}
+          key={index}
+          className={`absolute rounded-full bg-bolt-500 animate-pulse ${className}`}
         />
       ))}
     </div>
@@ -101,13 +97,11 @@ export default function LandingPage() {
     <div className="min-h-screen bg-storm-950 flex flex-col relative overflow-hidden">
       <ParticleDots />
 
-      {/* Gradient background glow */}
       <div
         aria-hidden="true"
         className="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-2xl h-96 blur-3xl opacity-20 pointer-events-none bg-[radial-gradient(ellipse_at_50%_0%,#ffe033_0%,transparent_70%)]"
       />
 
-      {/* Nav */}
       <header className="relative z-10 flex items-center justify-between px-6 py-5">
         <div className="flex items-center gap-2">
           <BoltIcon className="w-5 h-5 text-bolt-500" />
@@ -144,7 +138,7 @@ export default function LandingPage() {
           <Button
             variant="primary"
             size="lg"
-            className="flex-1"
+            className="flex-1 transition-transform duration-200 ease-out"
             onClick={() => navigate('/dashboard')}
           >
             <BoltIcon className="w-4 h-4" />
@@ -153,7 +147,7 @@ export default function LandingPage() {
           <Button
             variant="ghost"
             size="lg"
-            className="flex-1"
+            className="flex-1 transition-transform duration-200 ease-out"
             onClick={() => navigate('/dashboard?demo=1')}
           >
             See Demo
@@ -174,25 +168,25 @@ export default function LandingPage() {
             icon={<RadarIcon className="w-5 h-5" />}
             title="Live Strike Map"
             desc="Age-encoded markers update in real time."
-            delay="0ms"
+            delayClassName="[animation-delay:0ms]"
           />
           <FeatureCard
             icon={<ClockIcon className="w-5 h-5" />}
             title="Thunder ETA"
             desc="Precision countdown to inbound thunder."
-            delay="80ms"
+            delayClassName="[animation-delay:80ms]"
           />
           <FeatureCard
             icon={<ShieldIcon className="w-5 h-5" />}
             title="Safety Radius"
             desc="Configurable danger/warning/caution zones."
-            delay="160ms"
+            delayClassName="[animation-delay:160ms]"
           />
           <FeatureCard
             icon={<BoltIcon className="w-5 h-5" />}
             title="Smart Alerts"
             desc="Sound + vibration at your custom thresholds."
-            delay="240ms"
+            delayClassName="[animation-delay:240ms]"
           />
         </div>
       </section>

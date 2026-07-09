@@ -18,7 +18,7 @@ const glowClasses: Record<NonNullable<CardProps['glowColor']>, string> = {
 export function Card({ children, className = '', glowColor = 'none', title, action }: CardProps) {
   return (
     <div
-      className={`glass-card border transition-all duration-300 ${glowClasses[glowColor]} ${className}`}
+      className={`glass-card border transition-[border-color,box-shadow,transform] duration-200 ease-out ${glowClasses[glowColor]} ${className}`}
     >
       {(title || action) && (
         <div className="flex min-h-9 items-center justify-between px-4 pt-4 pb-3">
