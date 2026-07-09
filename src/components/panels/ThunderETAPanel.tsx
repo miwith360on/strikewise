@@ -60,17 +60,17 @@ export function ThunderETAPanel({ etas }: ThunderETAPanelProps) {
         <ClockIcon className="w-4 h-4 text-storm-500" />
       }
     >
-      <div className="px-4 pb-4 space-y-3">
+      <div className="px-4 pb-4 space-y-4">
         {etas.length === 0 ? (
-          <div className="text-center py-6">
-            <p className="text-storm-500 text-sm font-mono">No inbound thunder</p>
-            <p className="text-storm-600 text-xs mt-1">Skies are quiet</p>
+          <div className="py-7 text-center">
+            <p className="text-sm font-mono text-storm-400">No inbound thunder</p>
+            <p className="mt-1 text-xs text-storm-600">Skies are quiet</p>
           </div>
         ) : (
           <>
             {/* Hero ETA */}
-            <div className="text-center py-3 border-b border-storm-700">
-              <p className="text-xs uppercase tracking-widest text-storm-400 font-mono mb-1">
+            <div className="border-b border-storm-700 py-3 text-center">
+              <p className="mb-1 text-[11px] font-mono uppercase tracking-[0.14em] text-storm-400">
                 Closest Strike
               </p>
               <p
@@ -82,13 +82,13 @@ export function ThunderETAPanel({ etas }: ThunderETAPanelProps) {
               >
                 {nearest.etaRangeLabel}
               </p>
-              <p className="text-xs text-storm-400 mt-1 font-mono">
+              <p className="mt-1 text-xs font-mono text-storm-400">
                 {Math.round(nearest.distanceKm * 10) / 10} km · {Math.round(nearest.intensityKa)} kA
               </p>
             </div>
 
             {/* Queue */}
-            <div className="space-y-1.5">
+            <div className="space-y-2">
               {etas.slice(0, 4).map((e) => (
                 <ETARow key={e.strikeId} entry={e} />
               ))}

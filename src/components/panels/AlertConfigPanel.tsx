@@ -135,10 +135,10 @@ export function AlertConfigPanel({ config, onSave }: AlertConfigPanelProps) {
       glowColor="none"
       action={<BellIcon className="w-4 h-4 text-storm-500" />}
     >
-      <div className="px-4 pb-4 space-y-5">
+      <div className="space-y-4 px-4 pb-4">
         {/* Radius thresholds */}
         <div className="space-y-3 border-b border-storm-700 pb-4">
-          <p className="text-[10px] uppercase tracking-widest text-storm-500 font-mono">
+          <p className="text-[11px] font-mono font-semibold uppercase tracking-[0.14em] text-storm-500">
             Radius Thresholds
           </p>
           <SliderRow
@@ -175,7 +175,7 @@ export function AlertConfigPanel({ config, onSave }: AlertConfigPanelProps) {
 
         {/* Notification toggles */}
         <div className="space-y-3 border-b border-storm-700 pb-4">
-          <p className="text-[10px] uppercase tracking-widest text-storm-500 font-mono">
+          <p className="text-[11px] font-mono font-semibold uppercase tracking-[0.14em] text-storm-500">
             Notifications
           </p>
           <Toggle
@@ -196,16 +196,21 @@ export function AlertConfigPanel({ config, onSave }: AlertConfigPanelProps) {
         </div>
 
         {/* Repeat interval */}
-        <SliderRow
-          label="Repeat interval"
-          value={draft.repeatIntervalSec}
-          min={15}
-          max={300}
-          step={15}
-          unit="sec"
-          color="#00c8ff"
-          onChange={(v) => update('repeatIntervalSec', v)}
-        />
+        <div className="border-b border-storm-700 pb-4">
+          <p className="mb-2 text-[11px] font-mono font-semibold uppercase tracking-[0.14em] text-storm-500">
+            Repeat Alerts
+          </p>
+          <SliderRow
+            label="Repeat interval"
+            value={draft.repeatIntervalSec}
+            min={15}
+            max={300}
+            step={15}
+            unit="sec"
+            color="#00c8ff"
+            onChange={(v) => update('repeatIntervalSec', v)}
+          />
+        </div>
 
         {/* Save */}
         {validationError && (
@@ -214,7 +219,7 @@ export function AlertConfigPanel({ config, onSave }: AlertConfigPanelProps) {
         <Button
           variant={saved ? 'ghost' : 'primary'}
           size="sm"
-          className="w-full"
+          className="min-h-10 w-full"
           onClick={handleSave}
         >
           {saved ? '✓ Saved' : 'Apply Changes'}

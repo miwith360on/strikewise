@@ -123,10 +123,10 @@ export function StrikeStatsPanel({
   const isLoading = feedStatus === 'connecting' && strikes.length === 0;
 
   return (
-    <div className="glass-card border border-white/5 p-4 space-y-3">
+    <div className="glass-card space-y-4 border border-white/5 p-4">
       {/* Header */}
       <div className="flex items-center justify-between gap-3">
-        <span className="text-xs uppercase tracking-widest text-storm-400 font-mono">
+        <span className="text-[11px] font-mono font-semibold uppercase tracking-[0.14em] text-storm-400">
           Recent Strikes
         </span>
         {isLive && (
@@ -139,7 +139,7 @@ export function StrikeStatsPanel({
 
       {/* Strike rate */}
       {strikes.length > 0 && (
-        <div className="flex items-center justify-between rounded-lg bg-storm-900/60 px-3 py-2 border border-storm-700">
+        <div className="flex items-center justify-between rounded-lg border border-storm-700 bg-storm-900/60 px-3 py-2">
           <span className="text-[10px] font-mono uppercase tracking-wider text-storm-400">Strike Rate</span>
           <span className={`font-mono text-sm font-bold ${trendColor}`}>
             {rate}/min <span className="text-base">{trendIcon}</span>
@@ -165,7 +165,7 @@ export function StrikeStatsPanel({
       </div>
 
       {/* Secondary stats */}
-      <div className="grid grid-cols-2 gap-2">
+      <div className="grid grid-cols-2 gap-2 border-b border-storm-700 pb-3">
         {isLoading ? (
           <>
             <LoadingStatTile />
@@ -181,7 +181,7 @@ export function StrikeStatsPanel({
 
       {/* Data source row */}
       {feedMeta && (
-        <div className="flex items-center justify-between rounded-lg bg-storm-900/40 px-3 py-2 border border-storm-800">
+        <div className="flex items-center justify-between rounded-lg border border-storm-800 bg-storm-900/40 px-3 py-2">
           <div className="flex items-center gap-2">
             <span className="text-[10px] font-mono uppercase tracking-wider text-storm-500">Source</span>
             <span className={`text-[10px] font-mono font-semibold uppercase tracking-wider ${
@@ -208,7 +208,7 @@ export function StrikeStatsPanel({
       )}
 
       {/* Strike feed */}
-      <div className="space-y-1">
+      <div className="space-y-1.5">
         {isLoading && (
           <div className="space-y-2 rounded-lg border border-storm-700 bg-storm-900/40 p-3">
             <div className="h-3 w-24 rounded bg-storm-700/70 animate-pulse" />

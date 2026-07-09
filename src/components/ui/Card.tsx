@@ -21,9 +21,9 @@ export function Card({ children, className = '', glowColor = 'none', title, acti
       className={`glass-card border transition-all duration-300 ${glowClasses[glowColor]} ${className}`}
     >
       {(title || action) && (
-        <div className="flex items-center justify-between px-4 pt-4 pb-2">
+        <div className="flex min-h-9 items-center justify-between px-4 pt-4 pb-3">
           {title && (
-            <span className="text-xs uppercase tracking-widest text-storm-400 font-semibold font-mono">
+            <span className="text-[11px] uppercase tracking-[0.14em] text-storm-400 font-semibold font-mono">
               {title}
             </span>
           )}
