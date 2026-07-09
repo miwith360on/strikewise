@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import type {
   AlertConfig,
   FeedStatus,
@@ -264,9 +264,20 @@ export function useLightningFeed(): LightningFeedState {
     }));
   }, []);
 
-  const location = { lat: alertConfig.monitored.lat, lng: alertConfig.monitored.lng };
-  const safetyStatus = lightningService.getSafetyStatus(location, strikes, alertConfig, feedMeta);
-  const thunderETAs = lightningService.getThunderETAs(location, strikes);
+  const location = useMemo(
+    () => ({ lat: alertConfig.monitored.lat, lng: alertConfig.monitored.lng }),
+    [alertConfig.monitored.lat, alertConfig.monitored.lng],
+  );
+
+  const safetyStatus = useMemo(
+    () => lightningService.getSafetyStatus(location, strikes, alertConfig, feedMeta),
+    [location, strikes, alertConfig, feedMeta],
+  );
+
+  const thunderETAs = useMemo(
+    () => lightningService.getThunderETAs(location, strikes),
+    [location, strikes],
+  );
 
   return {
     strikes,

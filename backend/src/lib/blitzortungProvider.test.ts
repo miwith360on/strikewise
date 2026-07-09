@@ -2,9 +2,20 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createRequire } from 'node:module';
 
+interface BlitzortungProviderTestInstance {
+  monitored: { lat: number; lon: number };
+  buffer: unknown[];
+  totalKept: number;
+  _connect: () => void;
+  _handleStrike: (payload: unknown) => void;
+  start: () => void;
+  stop: () => void;
+  setMonitoredPoint: (lat: number, lon: number) => void;
+}
+
 const require = createRequire(import.meta.url);
 const { BlitzortungProvider } = require('./blitzortungProvider.cjs') as {
-  BlitzortungProvider: new (opts?: { lat?: number; lon?: number }) => any;
+  BlitzortungProvider: new (opts?: { lat?: number; lon?: number }) => BlitzortungProviderTestInstance;
 };
 
 test('start is idempotent and does not double-connect', () => {

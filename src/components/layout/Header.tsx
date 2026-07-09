@@ -159,7 +159,7 @@ export function Header({
           size="sm"
           onClick={onRequestGPS}
           disabled={gpsLoading}
-          className="px-2 py-1.5 text-xs hidden sm:flex"
+          className="px-2 py-1.5 text-xs"
           title="Use my location"
         >
           <LocationIcon className="w-3.5 h-3.5" />

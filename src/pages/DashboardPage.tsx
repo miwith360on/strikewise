@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useId, useMemo, useState } from 'react';
 import { useLightningFeed } from '@/hooks/useLightningFeed';
 import { useSelectedLocation } from '@/hooks/useSelectedLocation';
 import { useNwsAlerts } from '@/hooks/useNwsAlerts';
@@ -251,9 +251,10 @@ function NwsAlertBanner({ headline, severity, event, onDismiss }: {
         <span className="text-[11px] leading-snug">{headline}</span>
       </div>
       <button
+        type="button"
         onClick={onDismiss}
         aria-label="Dismiss alert"
-        className="flex-shrink-0 text-storm-400 hover:text-storm-200 transition-colors text-base leading-none"
+        className="flex-shrink-0 text-storm-400 hover:text-storm-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-bolt-500 transition-colors text-base leading-none"
       >
         ×
       </button>
@@ -274,12 +275,16 @@ function CollapsibleSection({
   defaultOpen?: boolean;
 }) {
   const [open, setOpen] = useState(defaultOpen);
+  const sectionId = useId();
 
   return (
     <div>
       <button
+        type="button"
         className="w-full flex items-center justify-between px-1 py-2 text-left group focus:outline-none"
         onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        aria-controls={sectionId}
       >
         <span className="flex items-center gap-2 text-[10px] uppercase tracking-widest font-mono text-storm-400 group-hover:text-storm-200 transition-colors">
           {icon}
@@ -289,7 +294,7 @@ function CollapsibleSection({
           className={`w-3.5 h-3.5 text-storm-500 transition-transform duration-200 ${open ? '' : '-rotate-90'}`}
         />
       </button>
-      {open && <div className="space-y-3">{children}</div>}
+      {open && <div id={sectionId} className="space-y-3">{children}</div>}
     </div>
   );
 }
@@ -539,6 +544,8 @@ export default function DashboardPage() {
                 <button
                   type="button"
                   onClick={() => setFocusMode(true)}
+                  aria-pressed={mobileFocusMode}
+                  aria-label="Enable focus mode"
                   className={`px-3 py-1.5 text-[11px] font-mono uppercase tracking-wider transition-colors ${
                     mobileFocusMode ? 'bg-bolt-500 text-storm-950' : 'text-storm-300 bg-transparent'
                   }`}
@@ -548,6 +555,8 @@ export default function DashboardPage() {
                 <button
                   type="button"
                   onClick={() => setFocusMode(false)}
+                  aria-pressed={!mobileFocusMode}
+                  aria-label="Enable full mode"
                   className={`px-3 py-1.5 text-[11px] font-mono uppercase tracking-wider transition-colors ${
                     mobileFocusMode ? 'text-storm-300 bg-transparent' : 'bg-storm-700 text-storm-50'
                   }`}

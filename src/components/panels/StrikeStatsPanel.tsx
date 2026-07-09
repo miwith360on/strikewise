@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import type { FeedStatus, LightningFeedMeta, LightningStrike } from '@/services/lightning/types';
 import { BoltIcon } from '@/components/ui/Icons';
 import { Button } from '@/components/ui/Button';
@@ -90,20 +91,25 @@ export function StrikeStatsPanel({
   onExpandRadius,
   canExpandRadius = false,
 }: StrikeStatsPanelProps) {
-  const sorted = [...strikes].sort((a, b) => b.timestamp - a.timestamp);
-  const recent = sorted.slice(0, 5);
+  const sorted = useMemo(() => [...strikes].sort((a, b) => b.timestamp - a.timestamp), [strikes]);
+  const recent = useMemo(() => sorted.slice(0, 5), [sorted]);
   const latestStrike = sorted[0] ?? null;
-  const measurableCurrents = strikes
-    .map(readPeakCurrentKa)
-    .filter((value): value is number => value !== null);
-  const avgIntensity = measurableCurrents.length > 0
-    ? Math.round(measurableCurrents.reduce((sum, value) => sum + Math.abs(value), 0) / measurableCurrents.length)
-    : null;
-  const maxIntensity = measurableCurrents.length > 0
-    ? Math.round(Math.max(...measurableCurrents.map((value) => Math.abs(value))))
-    : null;
 
-  const { rate, trend } = computeStrikeRate(strikes);
+  const { avgIntensity, maxIntensity } = useMemo(() => {
+    const measurableCurrents = strikes
+      .map(readPeakCurrentKa)
+      .filter((value): value is number => value !== null);
+
+    if (measurableCurrents.length === 0) {
+      return { avgIntensity: null, maxIntensity: null };
+    }
+
+    const avg = Math.round(measurableCurrents.reduce((sum, value) => sum + Math.abs(value), 0) / measurableCurrents.length);
+    const max = Math.round(Math.max(...measurableCurrents.map((value) => Math.abs(value))));
+    return { avgIntensity: avg, maxIntensity: max };
+  }, [strikes]);
+
+  const { rate, trend } = useMemo(() => computeStrikeRate(strikes), [strikes]);
   const trendIcon = trend === 'rising' ? '↑' : trend === 'falling' ? '↓' : '→';
   const trendColor = trend === 'rising' ? 'text-red-400' : trend === 'falling' ? 'text-green-400' : 'text-storm-400';
   const closestLabel = feedMeta?.closestStrikeKm != null ? `${feedMeta.closestStrikeKm.toFixed(1)} km` : '—';
@@ -224,34 +230,32 @@ export function StrikeStatsPanel({
             )}
           </div>
         )}
-        {recent.map((s, i) => (
-          (() => {
-            const strikeCurrent = readPeakCurrentKa(s);
-            return (
-          <div
-            key={s.id}
-            className={`flex items-center justify-between py-1 px-2 rounded-lg text-xs font-mono ${
-              i === 0 ? 'bg-bolt-glow' : ''
-            }`}
-          >
-            <div className="flex items-center gap-2">
-              <BoltIcon
-                className={`w-3 h-3 ${i === 0 ? 'text-bolt-500' : 'text-storm-500'}`}
-              />
-              <span className={i === 0 ? 'text-storm-200' : 'text-storm-500'}>
-                {strikeCurrent === null ? '—' : `${Math.round(Math.abs(strikeCurrent))} kA`}
-              </span>
-              <span className="text-storm-600">
-                {s.polarity === 'positive' ? '+CG' : '−CG'}
+        {recent.map((s, i) => {
+          const strikeCurrent = readPeakCurrentKa(s);
+          return (
+            <div
+              key={s.id}
+              className={`flex items-center justify-between py-1 px-2 rounded-lg text-xs font-mono ${
+                i === 0 ? 'bg-bolt-glow' : ''
+              }`}
+            >
+              <div className="flex items-center gap-2">
+                <BoltIcon
+                  className={`w-3 h-3 ${i === 0 ? 'text-bolt-500' : 'text-storm-500'}`}
+                />
+                <span className={i === 0 ? 'text-storm-200' : 'text-storm-500'}>
+                  {strikeCurrent === null ? '—' : `${Math.round(Math.abs(strikeCurrent))} kA`}
+                </span>
+                <span className="text-storm-600">
+                  {s.polarity === 'positive' ? '+CG' : '−CG'}
+                </span>
+              </div>
+              <span className={i === 0 ? 'text-bolt-600' : 'text-storm-600'}>
+                {timeAgo(s.timestamp)}
               </span>
             </div>
-            <span className={i === 0 ? 'text-bolt-600' : 'text-storm-600'}>
-              {timeAgo(s.timestamp)}
-            </span>
-          </div>
-            );
-          })()
-        ))}
+          );
+        })}
       </div>
     </div>
   );
