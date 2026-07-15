@@ -1,0 +1,102 @@
+⚡ Strikewise
+
+Real-time lightning intelligence. Track live lightning strikes near you, know how far the storm is, and get told when it's actually safe to go back outside.
+
+🔗 Live app: strikewise-production.up.railway.app
+
+
+⚠️ Operational preview. Not for safety-critical decisions.
+
+
+
+
+What it does
+
+Most weather apps tell you there's a chance of storms. Strikewise tells you where lightning is striking right now, how close it is to you, and when it's safe again.
+
+It plots live cloud-to-ground strikes on a map around your location, layers them over live weather radar, pulls in official National Weather Service alerts, and continuously answers the one question that actually matters when there's thunder outside: should I be inside right now?
+
+Built over four months, from a first MVP to a live system that has caught multiple real NWS-warned severe thunderstorms.
+
+
+Features
+
+🗺️ Live strike map
+
+Real lightning strikes plotted in real time and color-aged as they fade — so you can see at a glance where a storm is now versus where it's been. Tap any strike to inspect its distance, age, polarity, and thunder ETA. Tap anywhere on the map to move your monitored point.
+
+🛡️ Safety radius
+
+Three configurable rings around your location — Caution (25 km) · Warning (16 km) · Danger (8 km). The app tracks the closest strike against those rings and shifts its status from SAFE → CAUTION → WARNING → DANGER, complete with a plain-English recommendation ("Dangerous lightning activity is close. Go indoors now.").
+
+⏱️ Thunder ETA
+
+A live countdown to when you'll hear the thunder from a given strike, computed from the strike's distance and the speed of sound (343 m/s), adjusted for how long ago the strike happened. The oldest storm instinct there is — "one-Mississippi" — turned into the interface.
+
+⏳ 30-minute all-clear timer
+
+Follows the real NWS lightning-safety guideline: wait 30 minutes after the last nearby strike before heading back out. The app runs the countdown so you don't have to guess.
+
+🌧️ Live weather radar
+
+NOAA/NWS NEXRAD radar rendered underneath the strikes, so lightning is shown in the context of the actual storm producing it.
+
+🚨 Official NWS alerts
+
+Severe Thunderstorm Watches and Warnings pulled directly from the National Weather Service and surfaced in-app the moment they're issued for your area.
+
+📊 Live strike telemetry
+
+Strike rate per minute with a rising/falling trend, closest strike, latest strike, 10-minute totals, and a running feed of recent cloud-to-ground strikes as they land.
+
+🔀 Multi-provider failover
+
+The backend abstracts five different lightning data sources (Blitzortung, NOAA GOES GLM, Xweather, Tomorrow.io, Open-Meteo) behind a single provider registry with automatic failover. If one feed goes dark, the app keeps working — a resilience most weather apps don't have.
+
+🤖 ML storm nowcasting
+
+A Python service clusters incoming strikes with DBSCAN, fits their centroid movement with linear regression, and projects where the storm is headed ~15 minutes out — drawn on the map as a predicted track.
+
+📱 Focus / Full mode
+
+A toggle that lets you decide how much detail you want: Focus for a stripped-down "am I safe?" glance, Full for every panel and readout.
+
+🌎 Works anywhere
+
+No per-city setup. Location-aware and built on nationwide data sources — tested live in both Michigan and Atlanta.
+
+
+Architecture
+
+┌─────────────────────┐
+│  React + TypeScript │   Leaflet map · live panels · Focus/Full UI
+│      (frontend)     │
+└──────────┬──────────┘
+           │
+┌──────────▼──────────┐
+│   Node.js backend   │   provider registry + failover
+│                     │   safety analysis · NWS alerts
+└──────────┬──────────┘
+           │
+     ┌─────┴──────┬────────────────┐
+     │            │                │
+┌────▼─────┐ ┌────▼──────┐  ┌──────▼───────┐
+│ Lightning│ │  NEXRAD   │  │  Python ML   │
+│ providers│ │   radar   │  │   service    │
+│  (x5)    │ │           │  │ DBSCAN +     │
+└──────────┘ └───────────┘  │ regression   │
+                            └──────────────┘
+
+Stack: React · TypeScript · Vite · Leaflet · Tailwind · Node.js · Python · scikit-learn · SQLite · Railway
+
+
+Data sources
+
+SourceUsed forBlitzortungReal-time lightning strike locations (community detection network)NOAA GOES GLMSatellite-based lightning detectionNOAA / NWS NEXRADLive precipitation radarNWS Alerts APIOfficial Watches and WarningsXweather / Tomorrow.io / Open-MeteoAdditional provider options
+
+All primary data comes from free, public sources.
+
+
+Disclaimer
+
+Strikewise is an operational preview built as a personal project. It is not a certified safety system and should not be used for safety-critical decisions. If you can hear thunder, you are already close enough to be struck — go indoors and follow official guidance from the National Weather Service.
