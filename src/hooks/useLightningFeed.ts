@@ -21,6 +21,7 @@ import type { MapBounds } from '@/services/lightning/types';
 const QUERY_WINDOW_MINUTES = 30;
 const QUERY_LAT_SPAN = 0.8;
 const QUERY_LNG_SPAN = 1.1;
+const INITIAL_FETCH_RETRY_DELAYS_MS = [2_000, 5_000, 10_000, 30_000];
 
 const DEFAULT_CONFIG: AlertConfig = {
   dangerRadiusKm: 8,
@@ -160,6 +161,28 @@ export function useLightningFeed(): LightningFeedState {
       });
     }
 
+    const handleLiveStrike = (strike: LightningStrike) => {
+      const currentMeta = lightningService.getLatestMeta();
+      setFeedMeta(currentMeta);
+      if (lightningServiceMode === 'live') {
+        const nextStatus = deriveFeedStatus(currentMeta);
+        setIsLive(nextStatus === 'live');
+        setFeedStatus(nextStatus);
+        setFeedMessage(buildFeedMessage(currentMeta, QUERY_WINDOW_MINUTES));
+      }
+
+      setStrikes((prev) => {
+        if (prev.some((existing) => existing.id === strike.id)) {
+          return prev;
+        }
+
+        const cutoff = Date.now() - ALL_CLEAR_WINDOW_MS;
+        const pruned = prev.filter((s) => s.timestamp > cutoff);
+        return [...pruned, strike];
+      });
+      setNewestStrikeId(strike.id);
+    };
+
     const pollRisk = async () => {
       if (!lightningService.getRiskNowcast) {
         return;
@@ -188,61 +211,49 @@ export function useLightningFeed(): LightningFeedState {
 
     void pollRisk();
 
-    void lightningService.getRecentStrikes(bounds, QUERY_WINDOW_MINUTES)
-      .then((initial) => {
-        if (cancelled) {
-          return;
-        }
+    // Subscribe independently of the initial request so a transient startup
+    // failure cannot leave the feed disconnected until the location changes.
+    unsub = lightningService.subscribeToLiveStrikes(bounds, QUERY_WINDOW_MINUTES, handleLiveStrike);
 
-        setStrikes(initial);
-        const latestMeta = lightningService.getLatestMeta();
-        setFeedMeta(latestMeta);
-        if (lightningServiceMode === 'live') {
-          const nextStatus = deriveFeedStatus(latestMeta);
-          setIsLive(nextStatus === 'live');
-          setFeedStatus(nextStatus);
-          setFeedMessage(buildFeedMessage(latestMeta, QUERY_WINDOW_MINUTES));
-        }
+    const loadInitialStrikes = async () => {
+      let attempt = 0;
+      while (!cancelled) {
+        try {
+          const initial = await lightningService.getRecentStrikes(bounds, QUERY_WINDOW_MINUTES);
+          if (cancelled) return;
 
-        unsub = lightningService.subscribeToLiveStrikes(bounds, QUERY_WINDOW_MINUTES, (strike) => {
-          const currentMeta = lightningService.getLatestMeta();
-          setFeedMeta(currentMeta);
+          setStrikes(initial);
+          const latestMeta = lightningService.getLatestMeta();
+          setFeedMeta(latestMeta);
           if (lightningServiceMode === 'live') {
-            const nextStatus = deriveFeedStatus(currentMeta);
+            const nextStatus = deriveFeedStatus(latestMeta);
             setIsLive(nextStatus === 'live');
             setFeedStatus(nextStatus);
-            setFeedMessage(buildFeedMessage(currentMeta, QUERY_WINDOW_MINUTES));
+            setFeedMessage(buildFeedMessage(latestMeta, QUERY_WINDOW_MINUTES));
           }
+          return;
+        } catch {
+          if (cancelled) return;
 
-          setStrikes((prev) => {
-            if (prev.some((existing) => existing.id === strike.id)) {
-              return prev;
-            }
-
-            const cutoff = Date.now() - ALL_CLEAR_WINDOW_MS;
-            const pruned = prev.filter((s) => s.timestamp > cutoff);
-            return [...pruned, strike];
-          });
-          setNewestStrikeId(strike.id);
-        });
-      })
-      .catch((error: unknown) => {
-        if (!cancelled) {
-          setStrikes([]);
-          setNewestStrikeId(null);
           setIsLive(false);
-          setFeedMeta(null);
-          if (lightningServiceMode === 'demo') {
-            setFeedStatus('demo');
-            setFeedMessage('Demo feed only');
-          } else {
-            setFeedStatus('unavailable');
-            setFeedMessage(
-              error instanceof Error ? error.message : 'Live lightning feed unavailable',
-            );
-          }
+          setFeedStatus(lightningServiceMode === 'demo' ? 'demo' : 'connecting');
+          setFeedMessage(
+            lightningServiceMode === 'demo'
+              ? 'Demo feed only'
+              : attempt === 0
+                ? 'Reconnecting to live lightning feed'
+                : 'Retrying live lightning feed',
+          );
+          const delay = INITIAL_FETCH_RETRY_DELAYS_MS[Math.min(attempt, INITIAL_FETCH_RETRY_DELAYS_MS.length - 1)];
+          attempt++;
+          await new Promise<void>((resolve) => {
+            window.setTimeout(resolve, delay);
+          });
         }
-      });
+      }
+    };
+
+    void loadInitialStrikes();
 
     return () => {
       cancelled = true;

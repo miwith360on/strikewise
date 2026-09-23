@@ -34,6 +34,8 @@ const CLUSTER_STROKE = '#ff9f43';
 const NEXRAD_WMS_URL = 'https://opengeo.ncep.noaa.gov/geoserver/conus/conus_bref_qcd/ows';
 const NEXRAD_WMS_LAYER = 'conus_bref_qcd';
 const RADAR_REFRESH_DEBOUNCE_MS = 300;
+const CARTO_API_KEY = import.meta.env.VITE_CARTO_API_KEY?.trim();
+const CARTO_QUERY = CARTO_API_KEY ? `?api_key=${encodeURIComponent(CARTO_API_KEY)}` : '';
 const predictionLabelIcon = divIcon({
   className: 'storm-prediction-label',
   html: '<div></div>',
@@ -455,12 +457,12 @@ export function LightningMap({
       {/* Dark base map and a separate labels pane for clearer label legibility */}
       <TileLayer
         attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> &copy; <a href="https://carto.com/attributions">CARTO</a>'
-        url={`https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}{r}.png?api_key=${import.meta.env.VITE_CARTO_API_KEY}`}
+        url={`https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}{r}.png${CARTO_QUERY}`}
       />
 
       <Pane name="map-labels" style={{ zIndex: 325 }}>
         <TileLayer
-          url={`https://{s}.basemaps.cartocdn.com/dark_only_labels/{z}/{x}/{y}{r}.png?api_key=${import.meta.env.VITE_CARTO_API_KEY}`}
+          url={`https://{s}.basemaps.cartocdn.com/dark_only_labels/{z}/{x}/{y}{r}.png${CARTO_QUERY}`}
           pane="map-labels"
           opacity={0.95}
         />
