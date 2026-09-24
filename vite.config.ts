@@ -6,11 +6,6 @@ import { fileURLToPath, URL } from 'node:url'
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
   const backendTarget = env.VITE_BACKEND_URL || 'http://localhost:3000'
-  const cartoApiKey = env.VITE_CARTO_API_KEY?.trim()
-
-  if (mode === 'production' && !cartoApiKey) {
-    throw new Error('VITE_CARTO_API_KEY is required for production builds')
-  }
 
   return {
     plugins: [
