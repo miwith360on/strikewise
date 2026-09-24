@@ -9,8 +9,9 @@ cmds = [
 
 [phases.build]
 cmds = [
+	"npm run build",
 	"npm --prefix backend run build"
 ]
 
 [start]
-cmd = "npm --prefix backend start"
+cmd = "npm start"
