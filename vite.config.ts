@@ -36,10 +36,10 @@ export default defineConfig(({ mode }) => {
           globPatterns: ['**/*.{js,css,html,svg,png,ico}'],
           runtimeCaching: [
             {
-              urlPattern: /^https:\/\/basemaps\.cartocdn\.com\/.*/i,
-              handler: 'CacheFirst',
+              urlPattern: /^https:\/\/(([a-z]\.)?basemaps\.cartocdn\.com|server\.arcgisonline\.com)\/.*/i,
+              handler: 'StaleWhileRevalidate',
               options: {
-                cacheName: 'map-tiles',
+                cacheName: 'map-tiles-v2',
                 expiration: { maxEntries: 500, maxAgeSeconds: 60 * 60 * 24 },
               },
             },

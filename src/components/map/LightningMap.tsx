@@ -36,6 +36,22 @@ const NEXRAD_WMS_LAYER = 'conus_bref_qcd';
 const RADAR_REFRESH_DEBOUNCE_MS = 300;
 const CARTO_API_KEY = import.meta.env.VITE_CARTO_API_KEY?.trim();
 const CARTO_QUERY = CARTO_API_KEY ? `?api_key=${encodeURIComponent(CARTO_API_KEY)}` : '';
+// CARTO's public basemaps now return "API KEY REQUIRED" tiles without a key.
+// Without a key, use Esri's free dark gray canvas (no key needed, attribution required).
+const ESRI_ATTRIBUTION = 'Tiles &copy; <a href="https://www.esri.com">Esri</a> &mdash; Esri, HERE, Garmin, &copy; OpenStreetMap contributors';
+const BASEMAP = CARTO_API_KEY
+  ? {
+      base: `https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}{r}.png${CARTO_QUERY}`,
+      labels: `https://{s}.basemaps.cartocdn.com/dark_only_labels/{z}/{x}/{y}{r}.png${CARTO_QUERY}`,
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> &copy; <a href="https://carto.com/attributions">CARTO</a>',
+      maxNativeZoom: 20,
+    }
+  : {
+      base: 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}',
+      labels: 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}',
+      attribution: ESRI_ATTRIBUTION,
+      maxNativeZoom: 16,
+    };
 const predictionLabelIcon = divIcon({
   className: 'storm-prediction-label',
   html: '<div></div>',
@@ -456,13 +472,17 @@ export function LightningMap({
     >
       {/* Dark base map and a separate labels pane for clearer label legibility */}
       <TileLayer
-        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> &copy; <a href="https://carto.com/attributions">CARTO</a>'
-        url={`https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}{r}.png${CARTO_QUERY}`}
+        attribution={BASEMAP.attribution}
+        url={BASEMAP.base}
+        maxNativeZoom={BASEMAP.maxNativeZoom}
+        maxZoom={19}
       />
 
       <Pane name="map-labels" style={{ zIndex: 325 }}>
         <TileLayer
-          url={`https://{s}.basemaps.cartocdn.com/dark_only_labels/{z}/{x}/{y}{r}.png${CARTO_QUERY}`}
+          url={BASEMAP.labels}
+          maxNativeZoom={BASEMAP.maxNativeZoom}
+          maxZoom={19}
           pane="map-labels"
           opacity={0.95}
         />

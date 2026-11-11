@@ -101,11 +101,13 @@ export function buildSafetyStatus(
   const now = Date.now();
 
   // Never show a green "safe" when we can't actually see lightning.
+  // 0) Still connecting: no response from the server yet, so we know nothing.
   // 1) Every provider failed (outage): no strikes because we have no data, not because it's clear.
   // 2) Only the modeled fallback is available: its strike dots are estimated positions, so
   //    distances to them mean nothing and must not drive danger/safe.
-  const feedUnavailable = feedMeta?.provider === 'error'
-    || (feedMeta?.providerStatus === 'degraded' && strikes.length === 0);
+  const feedUnavailable = !feedMeta
+    || feedMeta.provider === 'error'
+    || (feedMeta.providerStatus === 'degraded' && strikes.length === 0);
   const estimatedOnly = Boolean(feedMeta?.simulated) && feedMeta?.provider !== 'mock';
 
   if (feedUnavailable || estimatedOnly) {
@@ -116,7 +118,9 @@ export function buildSafetyStatus(
       strikeCountLast10min: 0,
       changeRate: 'steady',
       recommendation: feedUnavailable
-        ? "Live lightning data is down right now, so Strikewise can't confirm it's safe. If you hear thunder, go inside."
+        ? (!feedMeta
+          ? "Connecting to live lightning data. Can't confirm it's safe yet. If you hear thunder, go inside."
+          : "Live lightning data is down right now, so Strikewise can't confirm it's safe. If you hear thunder, go inside.")
         : lightningPossible
           ? 'Live strike data is down. The forecast says lightning is possible near you. If you hear thunder, go inside.'
           : "Live strike data is down, so this is a forecast estimate only. If you hear thunder, go inside.",
