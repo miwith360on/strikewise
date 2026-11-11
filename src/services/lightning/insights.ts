@@ -99,6 +99,32 @@ export function buildSafetyStatus(
   feedMeta?: LightningFeedMeta | null,
 ): SafetyStatus {
   const now = Date.now();
+
+  // Never show a green "safe" when we can't actually see lightning.
+  // 1) Every provider failed (outage): no strikes because we have no data, not because it's clear.
+  // 2) Only the modeled fallback is available: its strike dots are estimated positions, so
+  //    distances to them mean nothing and must not drive danger/safe.
+  const feedUnavailable = feedMeta?.provider === 'error'
+    || (feedMeta?.providerStatus === 'degraded' && strikes.length === 0);
+  const estimatedOnly = Boolean(feedMeta?.simulated) && feedMeta?.provider !== 'mock';
+
+  if (feedUnavailable || estimatedOnly) {
+    const lightningPossible = estimatedOnly && strikes.length > 0;
+    return {
+      level: 'caution',
+      closestStrikeKm: 999,
+      strikeCountLast10min: 0,
+      changeRate: 'steady',
+      recommendation: feedUnavailable
+        ? "Live lightning data is down right now, so Strikewise can't confirm it's safe. If you hear thunder, go inside."
+        : lightningPossible
+          ? 'Live strike data is down. The forecast says lightning is possible near you. If you hear thunder, go inside.'
+          : "Live strike data is down, so this is a forecast estimate only. If you hear thunder, go inside.",
+      colorHex: '#ffe033',
+      allClearMinutesRemaining: 0,
+    };
+  }
+
   const tracked = strikes.filter((strike) => now - strike.timestamp < ALL_CLEAR_WINDOW_MS);
   const active = tracked.filter((strike) => now - strike.timestamp < ACTIVE_WINDOW_MS);
 
@@ -127,7 +153,10 @@ export function buildSafetyStatus(
         0,
         Math.ceil((ALL_CLEAR_WINDOW_MS - (now - lastNearbyStrike)) / 60000),
       );
-  const allClearMinutesRemaining = feedMeta?.allClearMinutesRemaining ?? localAllClearMinutesRemaining;
+  // Use the local timer: it counts only strikes inside the user's caution radius.
+  // The server's value counts every strike in the whole ~125 km query box, which kept
+  // people waiting on storms that were nowhere near them.
+  const allClearMinutesRemaining = localAllClearMinutesRemaining;
 
   const changeRate = feedMeta?.trend && feedMeta.trend !== 'unknown'
     ? feedMeta.trend

@@ -155,18 +155,22 @@ function DataConfidenceBanner({
   feedMeta,
 }: {
   gpsError: string | null;
-  feedMeta: { simulated?: boolean; providerStatus?: string; cached?: boolean; cacheAgeSeconds?: number | null } | null;
+  feedMeta: { provider?: string; simulated?: boolean; providerStatus?: string; cached?: boolean; cacheAgeSeconds?: number | null } | null;
 }) {
   const notes: string[] = [];
 
   if (gpsError) {
     notes.push('Location permission failed. Data may not match your exact area until you pin your location.');
   }
-  if (feedMeta?.simulated) {
-    notes.push('Feed is currently modeled/estimated, not direct observed strike telemetry.');
-  }
-  if (feedMeta?.providerStatus === 'degraded') {
-    notes.push('Primary live provider is degraded. Fallback source is being used.');
+  if (feedMeta?.provider === 'error') {
+    notes.push('Live lightning data is unavailable right now. No strikes are shown because there is no data, not because it is clear.');
+  } else {
+    if (feedMeta?.simulated && feedMeta.provider !== 'mock') {
+      notes.push('Live strikes are unavailable. Dots on the map are forecast estimates, not real strikes.');
+    }
+    if (feedMeta?.providerStatus === 'degraded') {
+      notes.push('Primary live provider is degraded. Fallback source is being used.');
+    }
   }
   if (feedMeta?.cached) {
     notes.push(`Showing cached data from ${feedMeta.cacheAgeSeconds ?? 0}s ago.`);
