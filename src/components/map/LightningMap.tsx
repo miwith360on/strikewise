@@ -39,7 +39,10 @@ const CARTO_QUERY = CARTO_API_KEY ? `?api_key=${encodeURIComponent(CARTO_API_KEY
 // CARTO's public basemaps now return "API KEY REQUIRED" tiles without a key.
 // Without a key, use Esri's free dark gray canvas (no key needed, attribution required).
 const ESRI_ATTRIBUTION = 'Tiles &copy; <a href="https://www.esri.com">Esri</a> &mdash; Esri, HERE, Garmin, &copy; OpenStreetMap contributors';
-const BASEMAP = CARTO_API_KEY
+// Use CARTO only when explicitly chosen (VITE_BASEMAP=carto) AND a key is set; an old or
+// invalid key would otherwise bring back the 'API KEY REQUIRED' tiles. Default: Esri, no key.
+const USE_CARTO = import.meta.env.VITE_BASEMAP?.trim().toLowerCase() === 'carto' && Boolean(CARTO_API_KEY);
+const BASEMAP = USE_CARTO
   ? {
       base: `https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}{r}.png${CARTO_QUERY}`,
       labels: `https://{s}.basemaps.cartocdn.com/dark_only_labels/{z}/{x}/{y}{r}.png${CARTO_QUERY}`,
